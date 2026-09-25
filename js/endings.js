@@ -57,7 +57,7 @@
   };
   async function endScreen(id, res) {
     const m = META[id], st = res.st;
-    MM.State.markEnding(id); UI.hideSub();
+    MM.State.markEnding(id); MM.State.clearProgress(); UI.hideSub();
     const seen = Object.keys(MM.State.endingsSeen).length;
     const el = MM.$('#endscr');
     el.innerHTML = `<div class="eh">${m.h}</div><div class="et2">${m.t}</div><div class="eq">${m.q}</div>

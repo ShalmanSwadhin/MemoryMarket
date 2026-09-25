@@ -197,7 +197,7 @@
   MM.Ch1 = {
     async run() {
       const S2 = MM.Scenes.office.fresh(), st = S2.st, rahim = S2.rahim, rw = S2.rw;
-      St.chapter = 1; UI.refreshHUD();
+      St.chapter = 1; UI.refreshHUD(); St.saveProgress();
       await MM.Flow.card('Chapter 1', 'The Broker', 'Memory Market · Dhaka, 2087', () => { E.loadScene(S2, { snapFx: true }); A.scene('none', 0.1); });
       A.scene('office', 2.5); UI.showHUD(true); UI.refreshHUD(); UI.tools('');
       await UI.fade(0, 1600); E.markStarted(); MM.setMode('play');

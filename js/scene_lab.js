@@ -93,7 +93,7 @@
   MM.Ch5 = {
     async run() {
       const F = MM.Flow, O = MM.Scenes.office.get(), ost = O.st;
-      MM.State.chapter = 5; UI.refreshHUD();
+      MM.State.chapter = 5; UI.refreshHUD(); MM.State.saveProgress();
       await F.card(5, 'M-09', 'The name on the door.');
       ost.rahimHere = false; O.rahim.visible = false; ost.door = 0; O.faceP = false;
       E.loadScene(O, { spawn: { x: 2.8, z: -1.2, yaw: 0 }, snapFx: true }); A.scene('office', 0.5); UI.tools('');

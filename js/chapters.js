@@ -35,7 +35,7 @@
   MM.Ch4 = {
     async run() {
       const O = MM.Scenes.office.get(), st = O.st, rahim = O.rahim, rw = O.rw, N = MM.Mnemos;
-      St.chapter = 4; UI.refreshHUD();
+      St.chapter = 4; UI.refreshHUD(); St.saveProgress();
       await Flow.exitMemory(() => {
         O.att = false;
         // Rahim is still standing in the scanner ring
@@ -105,22 +105,31 @@
 
   // =====================================================================
   MM.Game = {
-    async start() {
-      St.reset(); St.flags = {};
-      const h = (location.hash || '').replace('#', '');   // jump points used for testing
+    // resume: a saved-progress object from State.loadSavedProgress(), or omitted for a new game
+    async start(resume) {
+      const h = resume ? null : (location.hash || '').replace('#', '');   // jump points used for testing
+      if (resume) {
+        St.chapter = resume.chapter; St.flags = Object.assign({}, resume.flags); St.topics = Object.assign({}, resume.topics);
+        St.evidence = Object.assign({}, resume.evidence);
+        St.order = Object.keys(St.evidence).reduce((m, k) => Math.max(m, St.evidence[k]), 0);
+        St.contradictions = Object.assign({ c1: false, c2: false, c3: false }, resume.contradictions);
+      } else {
+        St.reset(); St.flags = {};
+      }
+      const target = resume ? 'ch' + resume.chapter : h;
       try {
         if (h === 'ch4' || h === 'ch5' || h === 'ch6' || h === 'ch6weak' || h === 'ch6mid') St.contradictions = { c1: true, c2: true, c3: true };
         if (h === 'ch4') grant(['E01', 'E02', 'E03', 'E04', 'E05', 'E06', 'E07', 'E08', 'E09', 'E10']);
         if (h === 'ch5' || h === 'ch6' || h === 'ch6mid') grant(ALL.filter((x) => x !== 'E14' && x !== 'E15').concat(h === 'ch6' || h === 'ch6mid' ? ['E14', 'E15'] : []));
         if (h === 'ch6weak') grant(['E01', 'E04', 'E09']);
-        if (!h || h === 'ch1') await MM.Ch1.run();
-        if (!h || h === 'ch1' || h === 'ch2') await MM.Ch2.run();
-        if (!h || h === 'ch1' || h === 'ch2' || h === 'ch4') await MM.Ch4.run();
-        if (!h || h === 'ch1' || h === 'ch2' || h === 'ch4' || h === 'ch5') await MM.Ch5.run();
+        if (!target || target === 'ch1') await MM.Ch1.run();
+        if (!target || target === 'ch1' || target === 'ch2' || target === 'ch3') await MM.Ch2.run();
+        if (!target || target === 'ch1' || target === 'ch2' || target === 'ch3' || target === 'ch4') await MM.Ch4.run();
+        if (!target || target === 'ch1' || target === 'ch2' || target === 'ch3' || target === 'ch4' || target === 'ch5') await MM.Ch5.run();
         await MM.Ch6.run();
       } catch (e) { console.error('Game flow error', e); UI.toast('Something went wrong: ' + e.message, 'warn', 8000); }
     },
-    restart() { location.reload(); },
+    restart() { St.clearProgress(); location.reload(); },
     toTitle() { location.reload(); }
   };
 })();

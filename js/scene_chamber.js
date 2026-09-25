@@ -88,7 +88,7 @@
   MM.Ch6 = {
     async run() {
       const F = MM.Flow;
-      MM.State.chapter = 6; UI.refreshHUD();
+      MM.State.chapter = 6; UI.refreshHUD(); MM.State.saveProgress();
       await F.card(6, 'The Argument', 'One question, and everything you found.');
       const S0 = Chamber.build();
       E.loadScene(S0, { snapFx: true }); A.scene('chamber', 1); UI.tools(''); UI.objective(''); UI.showHUD(false);

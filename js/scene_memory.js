@@ -184,7 +184,7 @@
   MM.Ch2 = {
     async run() {
       const S2 = MM.Scenes.memory.fresh(), st = S2.st, P = MM.Player;
-      St.chapter = 2; UI.refreshHUD();
+      St.chapter = 2; UI.refreshHUD(); St.saveProgress();
       await MM.Flow.enterMemory(() => { E.loadScene(S2, { snapFx: true }); A.scene('none', 0.1); }, 'Chapter 2', 'The Memory', 'Rahim\'s memory · Ashwin 1494');
       A.scene('memory', 2.5); UI.showHUD(true); UI.refreshHUD(); UI.tools('');
       await UI.fade(0, 2000); MM.setMode('play');
@@ -206,7 +206,7 @@
         st.ch3 = true; MM.freeze(); await MM.sleep(500);
         await UI.sayAll([['SYSTEM', 'TWO CONTRADICTIONS LOGGED. MEMORY ANALYZER AVAILABLE.'], ['M-09', 'Two lies in one room. And a door that keeps forgetting it exists.']]);
         UI.hideSub(); A.stinger();
-        await MM.Flow.card('Chapter 3', 'The Inconsistency', 'Someone else has been in here', () => { St.chapter = 3; UI.refreshHUD(); });
+        await MM.Flow.card('Chapter 3', 'The Inconsistency', 'Someone else has been in here', () => { St.chapter = 3; UI.refreshHUD(); St.saveProgress(); });
         A.scene('memory', 1); await UI.fade(0, 1400);
         st.unlocked = true; UI.tools('<div class="tool" id="anTool"><b>Q</b> Memory Analyzer</div>');
         UI.objective('Find the source', 'Toggle the Memory Analyzer (Q), then scan the sealed door');
