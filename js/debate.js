@@ -62,8 +62,8 @@
   }
   const esc = UI.esc;
   const STEPS = ['Claim', 'Evidence', 'Reasoning', 'MNEMOS', 'Response'];
-  const stepsHTML = (a) => '<div class="steps">' + STEPS.map((s, i) => `<span class="${i < a ? 'done' : i === a ? 'act' : ''}">${i + 1} · ${s}</span>`).join('') + '</div>';
-  const confText = (st) => `MODEL CONFIDENCE ${Math.round(st.conf)}%`;
+  const stepsHTML = (a) => '<div class="steps">' + STEPS.map((s, i) => `<span class="${i < a ? 'done' : i === a ? 'act' : ''}">${i + 1} · ${MM.Tr(s)}</span>`).join('') + '</div>';
+  const confText = (st) => `${MM.Tr('MODEL CONFIDENCE')} ${Math.round(st.conf)}%`;
 
   function pick(o) {
     // o: {st, cycle, phase:'argue'|'respond', target?, counter?}
@@ -72,21 +72,21 @@
       const sel = { target: respond ? o.target : null, ev: [], r: null };
       const ids = MM.State.list();
       box.innerHTML = stepsHTML(respond ? 4 : 0) +
-        `<div class="dh"><h3>${respond ? 'Answer the counterargument' : 'Challenge MNEMOS'}</h3><div class="rd conf">ROUND ${o.cycle} OF 3 · ${confText(st)}</div></div>` +
-        (respond ? `<div class="yourtext" style="border-color:var(--ice);color:#dff2ff">MNEMOS: “${esc(D.COUNTERS[o.target].text)}”</div>` : '') +
-        `<div class="dgrid"><div class="dcol"><h4>1 · The claim you challenge</h4><div id="dcl"></div></div>
-         <div class="dcol"><h4>2 · Evidence (choose 1 or 2)</h4><div class="dcards" id="dev"></div></div>
-         <div class="dcol"><h4>3 · How does it break the link?</h4><div class="rz" id="drz"></div><div class="rzh" id="dhint">Choose a reasoning type.</div><h4>Your words (optional)</h4><textarea class="dtext" id="dtx" placeholder="Say it in your own words. MNEMOS listens, but your evidence decides."></textarea></div></div>
-         <div class="dact"><span class="note2" id="dnote"></span><button class="btn primary" id="dgo" disabled>${respond ? 'Respond' : 'Present argument'}</button></div>`;
+        `<div class="dh"><h3>${MM.Tr(respond ? 'Answer the counterargument' : 'Challenge MNEMOS')}</h3><div class="rd conf">${MM.Tr('ROUND {n} OF 3').replace('{n}', o.cycle)} · ${confText(st)}</div></div>` +
+        (respond ? `<div class="yourtext" style="border-color:var(--ice);color:#dff2ff">MNEMOS: “${esc(MM.Tr(D.COUNTERS[o.target].text))}”</div>` : '') +
+        `<div class="dgrid"><div class="dcol"><h4>1 · ${MM.Tr('The claim you challenge')}</h4><div id="dcl"></div></div>
+         <div class="dcol"><h4>2 · ${MM.Tr('Evidence (choose 1 or 2)')}</h4><div class="dcards" id="dev"></div></div>
+         <div class="dcol"><h4>3 · ${MM.Tr('How does it break the link?')}</h4><div class="rz" id="drz"></div><div class="rzh" id="dhint">${MM.Tr('Choose a reasoning type.')}</div><h4>${MM.Tr('Your words (optional)')}</h4><textarea class="dtext" id="dtx" placeholder="${esc(MM.Tr('Say it in your own words. MNEMOS listens, but your evidence decides.'))}"></textarea></div></div>
+         <div class="dact"><span class="note2" id="dnote"></span><button class="btn primary" id="dgo" disabled>${MM.Tr(respond ? 'Respond' : 'Present argument')}</button></div>`;
       const cl = MM.$('#dcl', box), ev = MM.$('#dev', box), rz = MM.$('#drz', box), go = MM.$('#dgo', box), note = MM.$('#dnote', box), hint = MM.$('#dhint', box);
       Object.values(D.TARGETS).forEach((t) => {
-        const b = MM.el('button', 'claim' + (respond && t.id !== o.target ? ' locked' : ''), `${esc(t.label)}<small>${esc(t.chain)}${st.targetsHit[t.id] ? ' · already challenged' : ''}</small>`);
+        const b = MM.el('button', 'claim' + (respond && t.id !== o.target ? ' locked' : ''), `${esc(MM.Tr(t.label))}<small>${esc(MM.Tr(t.chain))}${st.targetsHit[t.id] ? ' · ' + MM.Tr('already challenged') : ''}</small>`);
         b.dataset.id = t.id; if (respond && t.id === o.target) b.classList.add('sel', 'locked');
         b.addEventListener('click', () => { if (respond) return; sel.target = t.id; cl.querySelectorAll('.claim').forEach((x) => x.classList.toggle('sel', x === b)); A.click(); upd(); });
         cl.appendChild(b);
       });
       ids.forEach((id) => {
-        const wrap = MM.el('div'); wrap.innerHTML = UI.cardHTML(D.EV[id], 'pick' + (st.used[id] ? ' used' : '')); const c = wrap.firstChild; c.title = D.EV[id].desc + ' — ' + D.EV[id].src;
+        const wrap = MM.el('div'); wrap.innerHTML = UI.cardHTML(D.EV[id], 'pick' + (st.used[id] ? ' used' : '')); const c = wrap.firstChild; c.title = MM.Tr(D.EV[id].desc) + ' — ' + MM.Tr(D.EV[id].src);
         c.addEventListener('click', () => {
           const i = sel.ev.indexOf(id);
           if (i >= 0) { sel.ev.splice(i, 1); c.classList.remove('sel'); }
@@ -96,15 +96,15 @@
         ev.appendChild(c);
       });
       Object.keys(D.REASONING).forEach((k) => {
-        const b = MM.el('button', '', esc(D.REASONING[k].label)); b.dataset.k = k;
-        b.addEventListener('mouseenter', () => { hint.textContent = D.REASONING[k].hint; });
-        b.addEventListener('click', () => { sel.r = k; rz.querySelectorAll('button').forEach((x) => x.classList.toggle('sel', x === b)); hint.textContent = D.REASONING[k].hint; A.click(); upd(); });
+        const b = MM.el('button', '', esc(MM.Tr(D.REASONING[k].label))); b.dataset.k = k;
+        b.addEventListener('mouseenter', () => { hint.textContent = MM.Tr(D.REASONING[k].hint); });
+        b.addEventListener('click', () => { sel.r = k; rz.querySelectorAll('button').forEach((x) => x.classList.toggle('sel', x === b)); hint.textContent = MM.Tr(D.REASONING[k].hint); A.click(); upd(); });
         rz.appendChild(b);
       });
       function upd() {
         const ok = sel.target && sel.ev.length >= 1 && sel.r; go.disabled = !ok;
-        note.textContent = !sel.target ? 'Choose which claim to challenge.' : !sel.ev.length ? 'Choose evidence you have collected.' : !sel.r ? 'Choose a type of reasoning.' : '';
-        if (!ids.length) note.textContent = 'You have no evidence. MNEMOS will not need to answer.';
+        note.textContent = !sel.target ? MM.Tr('Choose which claim to challenge.') : !sel.ev.length ? MM.Tr('Choose evidence you have collected.') : !sel.r ? MM.Tr('Choose a type of reasoning.') : '';
+        if (!ids.length) note.textContent = MM.Tr('You have no evidence. MNEMOS will not need to answer.');
       }
       upd();
       go.addEventListener('click', () => { A.confirm(); resolve({ target: sel.target, evidence: sel.ev.slice(), reasoning: sel.r, text: MM.$('#dtx', box).value.trim() }); });
@@ -113,9 +113,12 @@
 
   function autoText(arg) {
     const ev = D.EV[arg.evidence[0]], R = D.REASONING[arg.reasoning];
-    return R.tpl.replace('{c}', ev.title.replace(/\.$/, ''));
+    // translate the template (with its {c} placeholder preserved) and the
+    // evidence title separately, then splice - a fully-composed sentence
+    // can't be a dictionary key since it varies per evidence/reasoning pick
+    return MM.Tr(R.tpl).replace('{c}', MM.Tr(ev.title).replace(/[.।]$/, ''));
   }
-  function tile(label, txt, cls) { return `<div class="${cls}">${label}<b>${txt}</b></div>`; }
+  function tile(label, txt, cls) { return `<div class="${cls}">${MM.Tr(label)}<b>${MM.Tr(txt)}</b></div>`; }
   function tiles(res) {
     const e = res.EQ >= 4 ? ['STRONG', 'good'] : res.EQ >= 2.5 ? ['MODERATE', 'mid'] : ['WEAK', 'bad'];
     const l = res.LC >= 3 ? ['VALID', 'good'] : res.LC >= 1 ? ['PARTIAL', 'mid'] : ['FLAWED', 'bad'];
@@ -159,19 +162,19 @@
         const line = react(arg, res, cycle), flav = keywordFlavor(arg.text);
         const T1 = D.TARGETS[arg.target];
         box.innerHTML = '';
-        await show(`<div class="dh"><h3>MNEMOS evaluates your argument</h3><div class="rd conf">ROUND ${cycle} OF 3</div></div><div class="yourtext">“${esc(shown)}”</div><div class="rd" style="margin:2px 0 6px">Against: ${esc(T1.label)}</div>${tiles(res)}` +
-          (res.PE <= -2 ? '<div class="note">MNEMOS: You have already used this line of attack. Repetition weakens it.</div>' : ''), st, 3, 'Hear MNEMOS respond').then(() => { });
+        await show(`<div class="dh"><h3>${MM.Tr('MNEMOS evaluates your argument')}</h3><div class="rd conf">${MM.Tr('ROUND {n} OF 3').replace('{n}', cycle)}</div></div><div class="yourtext">“${esc(MM.Tr(shown))}”</div><div class="rd" style="margin:2px 0 6px">${MM.Tr('Against: {t}').replace('{t}', esc(MM.Tr(T1.label)))}</div>${tiles(res)}` +
+          (res.PE <= -2 ? `<div class="note">MNEMOS: ${MM.Tr('You have already used this line of attack. Repetition weakens it.')}</div>` : ''), st, 3, MM.Tr('Hear MNEMOS respond')).then(() => { });
         // (the verdict page is shown first; MNEMOS speaks on the next page)
-        box.innerHTML = stepsHTML(3) + `<div class="dh"><h3>MNEMOS responds</h3><div class="rd conf">${confText(st).replace(/\d+/, Math.round(b0))} → ${Math.round(b1)}%</div></div><div class="yourtext" style="border-color:var(--ice);color:#dff2ff;min-height:70px" id="mnl"></div><div class="conf" id="mnc"></div><div class="dact"><span class="note2"></span><button class="btn primary" id="dnext" disabled>Continue</button></div>`;
-        await typed(MM.$('#mnl', box), line + (flav ? ' ' + flav : ''));
-        MM.$('#mnc', box).textContent = res.S >= 6 ? `Your evidence has reduced my confidence from ${Math.round(b0)}% to ${Math.round(b1)}%.` : `My confidence is largely unchanged: ${Math.round(b0)}% to ${Math.round(b1)}%.`;
+        box.innerHTML = stepsHTML(3) + `<div class="dh"><h3>${MM.Tr('MNEMOS responds')}</h3><div class="rd conf">${confText(st).replace(/\d+/, Math.round(b0))} → ${Math.round(b1)}%</div></div><div class="yourtext" style="border-color:var(--ice);color:#dff2ff;min-height:70px" id="mnl"></div><div class="conf" id="mnc"></div><div class="dact"><span class="note2"></span><button class="btn primary" id="dnext" disabled>${MM.Tr('Continue')}</button></div>`;
+        await typed(MM.$('#mnl', box), MM.Tr(line) + (flav ? ' ' + MM.Tr(flav) : ''));
+        MM.$('#mnc', box).textContent = res.S >= 6 ? MM.Tr('Your evidence has reduced my confidence from {a}% to {b}%.').replace('{a}', Math.round(b0)).replace('{b}', Math.round(b1)) : MM.Tr('My confidence is largely unchanged: {a}% to {b}%.').replace('{a}', Math.round(b0)).replace('{b}', Math.round(b1));
         const nx = MM.$('#dnext', box); nx.disabled = false; await new Promise((r) => nx.addEventListener('click', () => { A.click(); r(); }));
 
         // 2. MNEMOS counters
         const counter = D.COUNTERS[arg.target];
         const [c0, c1] = Engine.applyCounter(st, arg.target, res); chamber.pulse(); chamber.setConf(st.conf);
-        box.innerHTML = stepsHTML(3) + `<div class="dh"><h3>MNEMOS counters</h3><div class="rd conf">${Math.round(c0)}% → ${Math.round(c1)}%</div></div><div class="yourtext" style="border-color:var(--ice);color:#dff2ff;min-height:70px" id="mnl"></div><div class="dact"><span class="note2">MNEMOS is defending its position. Prepare a response.</span><button class="btn primary" id="dnext" disabled>Respond</button></div>`;
-        await typed(MM.$('#mnl', box), counter.text);
+        box.innerHTML = stepsHTML(3) + `<div class="dh"><h3>${MM.Tr('MNEMOS counters')}</h3><div class="rd conf">${Math.round(c0)}% → ${Math.round(c1)}%</div></div><div class="yourtext" style="border-color:var(--ice);color:#dff2ff;min-height:70px" id="mnl"></div><div class="dact"><span class="note2">${MM.Tr('MNEMOS is defending its position. Prepare a response.')}</span><button class="btn primary" id="dnext" disabled>${MM.Tr('Respond')}</button></div>`;
+        await typed(MM.$('#mnl', box), MM.Tr(counter.text));
         const nx2 = MM.$('#dnext', box); nx2.disabled = false; await new Promise((r) => nx2.addEventListener('click', () => { A.click(); r(); }));
 
         // 3. player response
@@ -182,8 +185,8 @@
         const [d0, d1] = Engine.applyResponse(st, res2);
         chamber.feed(arg2.evidence, res2.S >= 6); chamber.setConf(st.conf);
         const line2 = res2.RB ? (res2.S >= 10 ? 'That answers my objection directly. I have no rebuttal that survives it.' : 'That addresses my objection. It does not fully remove it.') : react(arg2, res2, cycle + 1);
-        box.innerHTML = stepsHTML(4) + `<div class="dh"><h3>MNEMOS considers your response</h3><div class="rd conf">ROUND ${cycle} OF 3 · ${Math.round(d0)}% → ${Math.round(d1)}%</div></div><div class="yourtext">“${esc(shown2)}”</div>${tiles(res2)}<div class="yourtext" style="border-color:var(--ice);color:#dff2ff;min-height:56px" id="mnl"></div><div class="dact"><span class="note2">${res2.RB ? 'Your evidence speaks directly to the counterargument.' : ''}</span><button class="btn primary" id="dnext" disabled>${cycle < 3 ? 'Next round' : 'Conclude the argument'}</button></div>`;
-        await typed(MM.$('#mnl', box), line2 + ' ' + keywordFlavor(arg2.text));
+        box.innerHTML = stepsHTML(4) + `<div class="dh"><h3>${MM.Tr('MNEMOS considers your response')}</h3><div class="rd conf">${MM.Tr('ROUND {n} OF 3').replace('{n}', cycle)} · ${Math.round(d0)}% → ${Math.round(d1)}%</div></div><div class="yourtext">“${esc(MM.Tr(shown2))}”</div>${tiles(res2)}<div class="yourtext" style="border-color:var(--ice);color:#dff2ff;min-height:56px" id="mnl"></div><div class="dact"><span class="note2">${res2.RB ? MM.Tr('Your evidence speaks directly to the counterargument.') : ''}</span><button class="btn primary" id="dnext" disabled>${MM.Tr(cycle < 3 ? 'Next round' : 'Conclude the argument')}</button></div>`;
+        await typed(MM.$('#mnl', box), MM.Tr(line2) + ' ' + MM.Tr(keywordFlavor(arg2.text)));
         const nx3 = MM.$('#dnext', box); nx3.disabled = false; await new Promise((r) => nx3.addEventListener('click', () => { A.click(); r(); }));
       }
       host.classList.remove('on'); box.innerHTML = '';

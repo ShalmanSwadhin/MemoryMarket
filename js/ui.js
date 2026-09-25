@@ -50,16 +50,16 @@
 
     objective(text, sub) {
       if (!text) { objBox.className = ''; return; }
-      objBox.innerHTML = `<div class="ot">Objective</div><div class="ob">${esc(text)}</div>${sub ? `<div class="os">${esc(sub)}</div>` : ''}`;
+      objBox.innerHTML = `<div class="ot">${esc(MM.L('ui.objective'))}</div><div class="ob">${esc(MM.Tr(text))}</div>${sub ? `<div class="os">${esc(MM.Tr(sub))}</div>` : ''}`;
       objBox.className = 'on pulse';
       setTimeout(() => objBox.classList.remove('pulse'), 1400);
     },
-    objSub(sub) { const s = $('.os', objBox); if (s) s.textContent = sub; else if (sub) objBox.insertAdjacentHTML('beforeend', `<div class="os">${esc(sub)}</div>`); },
+    objSub(sub) { const s = $('.os', objBox); if (s) s.textContent = MM.Tr(sub); else if (sub) objBox.insertAdjacentHTML('beforeend', `<div class="os">${esc(MM.Tr(sub))}</div>`); },
 
     refreshHUD() {
       const n = MM.State.count(), c = MM.State.contradictionCount();
-      let h = `<div class="chip ev" title="Tab — Evidence journal"><b>${n}</b> evidence</div>`;
-      if (MM.State.chapter >= 2 && MM.State.chapter <= 3) h += `<div class="chip co"><b>${c}</b>/3 contradictions</div>`;
+      let h = `<div class="chip ev" title="${esc(MM.L('ui.journalTitle', { n }))}"><b>${n}</b> ${esc(MM.Tr('evidence'))}</div>`;
+      if (MM.State.chapter >= 2 && MM.State.chapter <= 3) h += `<div class="chip co"><b>${c}</b>/3 ${esc(MM.Tr('contradictions'))}</div>`;
       $('#chips').innerHTML = h;
     },
     tools(html) { $('#tools').innerHTML = html || ''; },
@@ -67,6 +67,7 @@
     // ---------- dialogue ----------
     say(who, text, o) {
       o = o || {};
+      text = MM.Tr(text);
       return new Promise((res) => {
         if (cur) cur.finish(true);
         const id = Math.random();
@@ -111,8 +112,8 @@
         UI.choosing = true;
         const prevMode = MM.mode; if (prevMode === 'play' || prevMode === 'cutscene') MM.setMode('ui');
         choiceBox.className = 'layer on';
-        choiceBox.innerHTML = (promptText ? `<div class="cp">${esc(promptText)}</div>` : '') +
-          options.map((o, i) => `<button class="opt${o.done ? ' done' : ''}${o.disabled ? ' dis' : ''}" data-i="${i}"><span class="k">${i + 1}</span><span class="l">${esc(o.label)}</span></button>`).join('');
+        choiceBox.innerHTML = (promptText ? `<div class="cp">${esc(MM.Tr(promptText))}</div>` : '') +
+          options.map((o, i) => `<button class="opt${o.done ? ' done' : ''}${o.disabled ? ' dis' : ''}" data-i="${i}"><span class="k">${i + 1}</span><span class="l">${esc(MM.Tr(o.label))}</span></button>`).join('');
         const finish = (i) => {
           window.removeEventListener('keydown', kd);
           choiceBox.className = 'layer'; choiceBox.innerHTML = ''; UI.choosing = false;
@@ -131,20 +132,20 @@
 
     // ---------- toasts / cards ----------
     toast(text, kind, ms) {
-      const t = el('div', 'toast ' + (kind || ''), esc(text));
+      const t = el('div', 'toast ' + (kind || ''), esc(MM.Tr(text)));
       toastBox.appendChild(t);
       requestAnimationFrame(() => t.classList.add('in'));
       setTimeout(() => { t.classList.remove('in'); setTimeout(() => t.remove(), 500); }, ms || 3800);
     },
     evidenceToast(ev) {
-      const t = el('div', 'toast evidence', `<div class="et">Evidence collected</div><div class="ec"><b>${esc(ev.id)}</b> ${esc(ev.title)}</div><div class="es">${esc(ev.cat)} · Tab to review</div>`);
+      const t = el('div', 'toast evidence', `<div class="et">${esc(MM.L('ui.evidenceCollected'))}</div><div class="ec"><b>${esc(ev.id)}</b> ${esc(MM.Tr(ev.title))}</div><div class="es">${esc(MM.Tr(ev.cat))} · ${esc(MM.L('ui.tabToReview'))}</div>`);
       toastBox.appendChild(t);
       MM.Audio.evidence();
       requestAnimationFrame(() => t.classList.add('in'));
       setTimeout(() => { t.classList.remove('in'); setTimeout(() => t.remove(), 600); }, 5200);
     },
     async chapterCard(num, title, sub) {
-      cardEl.innerHTML = `<div class="cc"><div class="cn">${num}</div><div class="ct">${esc(title)}</div>${sub ? `<div class="cs">${esc(sub)}</div>` : ''}</div>`;
+      cardEl.innerHTML = `<div class="cc"><div class="cn">${esc(MM.Tr(num))}</div><div class="ct">${esc(MM.Tr(title))}</div>${sub ? `<div class="cs">${esc(MM.Tr(sub))}</div>` : ''}</div>`;
       cardEl.className = 'layer on';
       await MM.sleep(300); cardEl.classList.add('show');
       await MM.sleep(3000); cardEl.classList.remove('show');
@@ -192,13 +193,13 @@
       if (MM.mode !== 'play') return;
       UI.journalOpen = true;
       const ids = MM.State.list();
-      const cards = ids.length ? ids.map((id) => UI.cardHTML(MM.Data.EV[id])).join('') : '<div class="empty">Nothing collected yet. Investigate objects, people and terminals.</div>';
+      const cards = ids.length ? ids.map((id) => UI.cardHTML(MM.Data.EV[id])).join('') : `<div class="empty">${esc(MM.L('ui.journalEmpty'))}</div>`;
       const c = MM.State.contradictions;
-      const ctr = MM.State.chapter >= 2 ? `<div class="ctr"><span class="${c.c1 ? 'y' : ''}">Timeline: death at 8:30 PM, message at 8:47 PM</span><span class="${c.c2 ? 'y' : ''}">Photograph: a person Rahim says never existed</span><span class="${c.c3 ? 'y' : ''}">Memory integrity 61%, modification detected</span></div>` : '';
-      UI.journal = UI.panel({ title: 'Evidence journal — ' + ids.length + ' of 15 fragments', closable: true, cls: 'journal', html: ctr + '<div class="cards">' + cards + '</div>', onClose: () => { UI.journalOpen = false; } });
+      const ctr = MM.State.chapter >= 2 ? `<div class="ctr"><span class="${c.c1 ? 'y' : ''}">${esc(MM.Tr('Timeline: death at 8:30 PM, message at 8:47 PM'))}</span><span class="${c.c2 ? 'y' : ''}">${esc(MM.Tr('Photograph: a person Rahim says never existed'))}</span><span class="${c.c3 ? 'y' : ''}">${esc(MM.Tr('Memory integrity 61%, modification detected'))}</span></div>` : '';
+      UI.journal = UI.panel({ title: MM.L('ui.journalTitle', { n: ids.length }), closable: true, cls: 'journal', html: ctr + '<div class="cards">' + cards + '</div>', onClose: () => { UI.journalOpen = false; } });
     },
     cardHTML(ev, extra) {
-      return `<div class="frag ${extra || ''}" data-id="${ev.id}"><div class="fh"><span>Memory fragment #${ev.id.slice(1)}</span><span class="cat">${ev.cat}</span></div><div class="ft">${esc(ev.title)}</div><div class="fd">${esc(ev.desc)}</div><div class="fs">${esc(ev.src)}</div></div>`;
+      return `<div class="frag ${extra || ''}" data-id="${ev.id}"><div class="fh"><span>${esc(MM.L('ui.fragment', { n: ev.id.slice(1) }))}</span><span class="cat">${esc(MM.Tr(ev.cat))}</span></div><div class="ft">${esc(MM.Tr(ev.title))}</div><div class="fd">${esc(MM.Tr(ev.desc))}</div><div class="fs">${esc(MM.Tr(ev.src))}</div></div>`;
     },
 
     // pause / lock overlays handled by engine
