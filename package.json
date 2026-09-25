@@ -1,0 +1,18 @@
+{
+  "name": "memory-market",
+  "version": "1.4.0",
+  "private": true,
+  "description": "Memory Market - a first-person narrative sci-fi mystery, Dhaka 2087",
+  "scripts": {
+    "dev:server": "node scripts/dev-server.js",
+    "test": "node scripts/run-tests.js"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
