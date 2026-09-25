@@ -92,39 +92,71 @@
     const texes = [M.windowTex('tower', 1), M.windowTex('tower', 2), M.windowTex('old', 3), M.windowTex('old', 4)];
     const roofMat = M.basic(0x0a0e18);
     const signMeshes = [];
+    // The skyline used to be one mesh per building with a 6-entry material
+    // array (six draw calls each, ~430 in total) plus a mesh per rooftop
+    // prop. It is now merged into one mesh per window texture (tint baked in
+    // as vertex colours) plus one for all the props - same picture, a few
+    // dozen draw calls instead of hundreds, which is what a phone's CPU
+    // chokes on. Roofs and undersides are dropped: from street level they can
+    // never be seen.
+    const buckets = texes.map(() => ({ pos: [], uv: [], col: [], idx: [] }));
+    const clutter = { pos: [], col: [], idx: [] };
+    const addClutter = (geo, ox, oy, oz, hex) => {
+      const p = geo.attributes.position, base = clutter.pos.length / 3, c = new T.Color(hex);
+      for (let i = 0; i < p.count; i++) { clutter.pos.push(p.getX(i) + ox, p.getY(i) + oy, p.getZ(i) + oz); clutter.col.push(c.r, c.g, c.b); }
+      const ix = geo.index; for (let i = 0; i < ix.count; i++) clutter.idx.push(base + ix.getX(i));
+    };
+    const signCap = MM.lowPower ? 14 : 46;
     for (let r = 0; r < o.rows; r++) {
       let x = -o.width / 2 + rnd() * 5;
       const zRow = o.z0 - r * 14 - rnd() * 3;
       while (x < o.width / 2) {
         const old = r <= 1 && rnd() < 0.6;
         const w = 5 + rnd() * 8, d = 6 + rnd() * 6, h = old ? 7 + rnd() * 9 : 15 + rnd() * (26 + r * 16);
-        const tex = texes[(old ? 2 : 0) + Math.floor(rnd() * 2)];
+        const ti = (old ? 2 : 0) + Math.floor(rnd() * 2);
         const geo = new T.BoxGeometry(w, h, d);
-        const uv = geo.attributes.uv;
-        for (let i = 0; i < uv.count; i++) {
-          const face = Math.floor(i / 4);
-          const sx = (face === 0 || face === 1) ? d / (old ? 4.4 : 5) : (face === 4 || face === 5) ? w / (old ? 4.4 : 5) : 0;
-          const sy = h / (old ? 6 : 12);
-          if (face >= 2 && face <= 3) uv.setXY(i, 0.02, 0.02); else uv.setXY(i, uv.getX(i) * sx, uv.getY(i) * sy);
-        }
+        const gp = geo.attributes.position, gu = geo.attributes.uv, gi = geo.index;
         const tint = new T.Color().setHSL(0.6 + rnd() * 0.08, 0.35, 0.55 + rnd() * 0.35);
-        const sideMat = new T.MeshBasicMaterial({ map: tex, color: tint });
-        const b = new T.Mesh(geo, [sideMat, sideMat, roofMat, roofMat, sideMat, sideMat]);
-        b.position.set(x + w / 2, h / 2 - 3, zRow);
-        grp.add(b);
-        // rooftop clutter
-        if (rnd() < 0.5) M.cyl(0.9, 1.0, 1.6, 6, M.basic(0x1a2233), (rnd() - 0.5) * w * 0.5, h / 2 + 0.8, (rnd() - 0.5) * d * 0.5, b);
-        if (rnd() < 0.4) M.cyl(0.05, 0.05, 4 + rnd() * 6, 4, M.basic(0x2a3348), (rnd() - 0.5) * w * 0.6, h / 2 + 3, 0, b);
-        if (old && rnd() < 0.35) { const dome = new T.Mesh(new T.SphereGeometry(Math.min(w, d) * 0.28, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), M.basic(0x2b3556)); dome.position.set(0, h / 2, 0); b.add(dome); }
-        if (o.signs && r < 3 && rnd() < 0.42 && signMeshes.length < 46) {
-          const useBn = rnd() < 0.72, s = useBn ? BN_SIGNS[Math.floor(rnd() * BN_SIGNS.length)] : EN_SIGNS[Math.floor(rnd() * EN_SIGNS.length)];
+        const bx = x + w / 2, by = h / 2 - 3, bz = zRow, bk = buckets[ti];
+        for (const face of [0, 1, 4, 5]) { // +x, -x, +z, -z sides only
+          const base = bk.pos.length / 3;
+          const sx = (face === 0 || face === 1) ? d / (old ? 4.4 : 5) : w / (old ? 4.4 : 5), sy = h / (old ? 6 : 12);
+          for (let v = face * 4; v < face * 4 + 4; v++) { bk.pos.push(gp.getX(v) + bx, gp.getY(v) + by, gp.getZ(v) + bz); bk.uv.push(gu.getX(v) * sx, gu.getY(v) * sy); bk.col.push(tint.r, tint.g, tint.b); }
+          for (let i = face * 6; i < face * 6 + 6; i++) bk.idx.push(base + gi.getX(i) - face * 4);
+        }
+        geo.dispose();
+        // rooftop clutter (same random draws, in the same order, as before)
+        if (rnd() < 0.5) { const ox = (rnd() - 0.5) * w * 0.5, oz = (rnd() - 0.5) * d * 0.5; addClutter(new T.CylinderGeometry(0.9, 1.0, 1.6, 6), bx + ox, by + h / 2 + 0.8, bz + oz, 0x1a2233); }
+        if (rnd() < 0.4) { const len = 4 + rnd() * 6, ox = (rnd() - 0.5) * w * 0.6; addClutter(new T.CylinderGeometry(0.05, 0.05, len, 4), bx + ox, by + h / 2 + 3, bz, 0x2a3348); }
+        if (old && rnd() < 0.35) addClutter(new T.SphereGeometry(Math.min(w, d) * 0.28, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), bx, by + h / 2, bz, 0x2b3556);
+        if (o.signs && r < 3 && rnd() < 0.42) {
+          const useBn = rnd() < 0.72, sgn = useBn ? BN_SIGNS[Math.floor(rnd() * BN_SIGNS.length)] : EN_SIGNS[Math.floor(rnd() * EN_SIGNS.length)];
           const sw = Math.min(w * 0.95, 5.5), sh = sw * 0.25;
-          const sm = M.signMesh(s[0], sw, sh, { color: s[1], size: useBn ? 66 : 56, bn: useBn, w: 512 });
-          sm.position.set(b.position.x + (rnd() - 0.5) * 1.5, Math.max(4, Math.min(h * 0.55, 3 + rnd() * h * 0.6)) - 3, zRow + d / 2 + 0.06);
-          grp.add(sm); signMeshes.push(sm);
+          const jx = (rnd() - 0.5) * 1.5, jy = Math.max(4, Math.min(h * 0.55, 3 + rnd() * h * 0.6)) - 3;
+          if (signMeshes.length < signCap) { // beyond the cap the draws above still happen, so the skyline is the same on every device
+            const sm = M.signMesh(sgn[0], sw, sh, { color: sgn[1], size: useBn ? 66 : 56, bn: useBn, w: 512 });
+            sm.position.set(bx + jx, jy, zRow + d / 2 + 0.06);
+            grp.add(sm); signMeshes.push(sm);
+          }
         }
         x += w + 0.6 + rnd() * 2.2;
       }
+    }
+    buckets.forEach((bk, ti) => {
+      if (!bk.idx.length) return;
+      const g = new T.BufferGeometry();
+      g.setAttribute('position', new T.Float32BufferAttribute(bk.pos, 3));
+      g.setAttribute('uv', new T.Float32BufferAttribute(bk.uv, 2));
+      g.setAttribute('color', new T.Float32BufferAttribute(bk.col, 3));
+      g.setIndex(bk.idx);
+      grp.add(new T.Mesh(g, new T.MeshBasicMaterial({ map: texes[ti], vertexColors: true })));
+    });
+    if (clutter.idx.length) {
+      const g = new T.BufferGeometry();
+      g.setAttribute('position', new T.Float32BufferAttribute(clutter.pos, 3));
+      g.setAttribute('color', new T.Float32BufferAttribute(clutter.col, 3));
+      g.setIndex(clutter.idx);
+      grp.add(new T.Mesh(g, new T.MeshBasicMaterial({ vertexColors: true })));
     }
     // landmark: pink-palace-inspired arcaded building with dome (old Dhaka)
     if (o.landmark) {
@@ -139,17 +171,23 @@
       const halo = M.glowSprite(0xff7ab6, 30, 0.35); halo.position.set(0, 6, 5); lm.add(halo);
       lm.position.set(6, 3, -30); grp.add(lm);
     }
-    // cables between near buildings
-    const cabMat = new T.LineBasicMaterial({ color: 0x0b0f18 });
+    // cables between near buildings (one LineSegments for all of them)
+    const cabPos = [];
     for (let i = 0; i < 14; i++) {
       const x0 = -40 + rnd() * 80, y0 = 6 + rnd() * 14, z0 = o.z0 + 2 - rnd() * 10;
-      const pts = []; const x1 = x0 + 10 + rnd() * 20, y1 = y0 + (rnd() - 0.5) * 4;
-      for (let k = 0; k <= 12; k++) { const t = k / 12; pts.push(new T.Vector3(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t - Math.sin(t * Math.PI) * 1.8, z0)); }
-      grp.add(new T.Line(new T.BufferGeometry().setFromPoints(pts), cabMat));
+      const x1 = x0 + 10 + rnd() * 20, y1 = y0 + (rnd() - 0.5) * 4;
+      let prev = null;
+      for (let k = 0; k <= 12; k++) {
+        const t = k / 12, p = [x0 + (x1 - x0) * t, y0 + (y1 - y0) * t - Math.sin(t * Math.PI) * 1.8, z0];
+        if (prev) cabPos.push(prev[0], prev[1], prev[2], p[0], p[1], p[2]);
+        prev = p;
+      }
     }
+    { const cg = new T.BufferGeometry(); cg.setAttribute('position', new T.Float32BufferAttribute(cabPos, 3)); grp.add(new T.LineSegments(cg, new T.LineBasicMaterial({ color: 0x0b0f18 }))); }
     // flying rickshaw-drones
     const flyers = [];
-    for (let i = 0; i < 9; i++) {
+    const nFlyers = MM.lowPower ? 4 : 9; // random draws below are per-flyer, and flyers are the last thing built, so this doesn't disturb the skyline
+    for (let i = 0; i < nFlyers; i++) {
       const f = new T.Group();
       M.box(1.4, 0.3, 0.7, M.basic([0xff4a8a, 0x37e6ff, 0xffc857, 0x8bff9f][i % 4]), 0, 0, 0, f);
       const hood = new T.Mesh(new T.CylinderGeometry(0.42, 0.42, 0.9, 6, 1, false, 0, Math.PI), M.basic(0x2a3358)); hood.rotation.z = Math.PI / 2; hood.rotation.y = 0; hood.position.set(0, 0.3, 0); f.add(hood);

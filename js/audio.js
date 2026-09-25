@@ -46,6 +46,7 @@
   const A = MM.Audio = {
     get ready() { return !!ctx; },
     get ctx() { return ctx; },
+    _master() { return master; }, // test hook: lets a test tap the final mix
 
     init() {
       if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
@@ -57,12 +58,12 @@
       dialogueBus = ctx.createGain(); dialogueBus.gain.value = busVol.dialogue;
       comp = ctx.createDynamicsCompressor();
       master.connect(comp); comp.connect(ctx.destination);
-      reverb = ctx.createConvolver(); reverb.buffer = impulse(3.2, 2.6);
+      reverb = ctx.createConvolver(); reverb.buffer = impulse(MM.lowPower ? 1.4 : 3.2, MM.lowPower ? 3.2 : 2.6);
       revSend = ctx.createGain(); revSend.gain.value = 0.5;
       reverb.connect(revSend); revSend.connect(master);
       noiseBuf = noiseBuffer('white', 2.5); brownBuf = noiseBuffer('brown', 4);
 
-      const mk = (name) => { const g = ctx.createGain(); g.gain.value = 0; g.connect(LAYER_BUS[name] === 'music' ? musicBus : ambienceBus); L[name] = { g }; return g; };
+      const mk = (name) => { const g = ctx.createGain(); g.gain.value = 0; g.connect(LAYER_BUS[name] === 'music' ? musicBus : ambienceBus); L[name] = { g, bus: LAYER_BUS[name] === 'music' ? musicBus : ambienceBus, on: true, t: 0 }; return g; };
 
       // rain: hiss + roof drum
       let g = mk('rain');
@@ -91,7 +92,7 @@
       lfo.connect(lg); lg.connect(fg.gain); lfo.start();
       s.connect(fanLP); fanLP.connect(fg); fg.connect(g);
 
-      // memory pad (dreamlike, through reverb)
+      // memory pad (dreamlike; deliberately NOT sent to the reverb - that send ignored the scene fade and the Music setting, and kept a long convolution running constantly)
       g = mk('pad');
       const padIn = ctx.createGain(); padIn.gain.value = 0.5;
       const pl = ctx.createBiquadFilter(); pl.type = 'lowpass'; pl.frequency.value = 700;
@@ -100,7 +101,7 @@
         const l2 = ctx.createOscillator(); l2.frequency.value = 0.07 + i * 0.05; const lg2 = ctx.createGain(); lg2.gain.value = f * 0.01;
         l2.connect(lg2); lg2.connect(o.o.frequency); l2.start();
       });
-      padIn.connect(pl); pl.connect(g); pl.connect(reverb);
+      padIn.connect(pl); pl.connect(g);
 
       // chamber: sub + shimmer, slow pulse
       g = mk('chamber');
@@ -130,7 +131,16 @@
     setBusVolume(bus, v) {
       busVol[bus] = v;
       const node = { music: musicBus, ambience: ambienceBus, sfx: sfxBus, dialogue: dialogueBus }[bus];
-      if (node) node.gain.setTargetAtTime(v, ctx.currentTime, 0.05);
+      if (!node) return;
+      node.gain.setTargetAtTime(v, ctx.currentTime, 0.05);
+      // Web Audio only renders what is connected to the output, so a muted
+      // bus is disconnected once its fade-out finishes - every loop feeding
+      // it then costs no CPU at all. (dialogueBus feeds nothing: TTS is the
+      // browser's own speechSynthesis.)
+      clearTimeout(node._dc);
+      if (v <= 0.001) {
+        node._dc = setTimeout(() => { if (busVol[bus] <= 0.001 && !node._off) { try { node.disconnect(); } catch (e) { } node._off = true; } }, 250);
+      } else if (node._off) { node.connect(master); node._off = false; }
     },
     getBusVolume(bus) { return busVol[bus]; },
 
@@ -148,7 +158,13 @@
         warm:    { rain: 0.05, city: 0, hum: 0, fan: 0, pad: 0.30, chamber: 0, heart: 0, rainF: 900, fanF: 200 }
       };
       const p = P[name] || P.none, now = ctx.currentTime, tc = fade / 3;
-      ['rain', 'city', 'hum', 'fan', 'pad', 'chamber'].forEach((k) => L[k] && L[k].g.gain.setTargetAtTime(p[k], now, tc));
+      ['rain', 'city', 'hum', 'fan', 'pad', 'chamber'].forEach((k) => {
+        const l = L[k]; if (!l) return;
+        l.g.gain.setTargetAtTime(p[k], now, tc);
+        clearTimeout(l.t);
+        if (p[k] > 0) { if (!l.on) { l.g.connect(l.bus); l.on = true; } }
+        else l.t = setTimeout(() => { if (l.on) { try { l.g.disconnect(); } catch (e) { } l.on = false; } }, (fade + 0.6) * 1000);
+      });
       rainLP.frequency.setTargetAtTime(p.rainF, now, tc);
       fanLP.frequency.setTargetAtTime(p.fanF, now, tc);
       heartLevel = p.heart;
@@ -158,7 +174,7 @@
     },
 
     _thump() {
-      if (!ctx || heartLevel <= 0) return;
+      if (!ctx || heartLevel <= 0 || busVol.ambience <= 0.001) return;
       const t = ctx.currentTime;
       [0, 0.18].forEach((d, i) => {
         const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(70 - i * 10, t + d);
@@ -170,7 +186,7 @@
       });
     },
     _cityEvent() {
-      if (!ctx || (curScene !== 'office' && curScene !== 'title')) return;
+      if (!ctx || busVol.ambience <= 0.001 || (curScene !== 'office' && curScene !== 'title')) return;
       // distant hover-transport whoosh or horn - ambience, like the city loop it punctuates
       const t = ctx.currentTime;
       if (Math.random() < 0.5) {

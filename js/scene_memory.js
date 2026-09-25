@@ -154,7 +154,7 @@
         if (st.clockGlitch > 0) { st.clockGlitch -= dt; if (Math.random() < 0.3) clock.set(Math.floor(Math.random() * 12), Math.floor(Math.random() * 60)); if (st.clockGlitch <= 0) clock.set(8, 17); }
         else if (Math.sin(t * 1.7) > 0.985) clock.set(8, 30); else clock.set(8, 17);
         S2._pt = (S2._pt || 0) + dt;
-        if (S2._pt > 0.2) { S2._pt = 0; drawPhoto(photoTex.userData.ctx, 320, 220, t, false); photoTex.needsUpdate = true; }
+        if (S2._pt > (MM.lowPower ? 0.6 : 0.2)) { S2._pt = 0; drawPhoto(photoTex.userData.ctx, 320, 220, t, false); photoTex.needsUpdate = true; }
         // sealed door flicker
         if (st.sealed) { doorMesh.visible = Math.sin(t * 13) < 0.93 && Math.sin(t * 5.3) < 0.98; doorSeal.material.opacity = 0.25 + 0.2 * Math.sin(t * 4); }
         else doorSeal.material.opacity = 0;

@@ -164,7 +164,7 @@
         rg.position.y = ringS.y; scanL.intensity = 0.8 + (ringS.on ? 0.6 * Math.sin(t * 20) : 0); ringM.material.color.setHex(ringS.on ? 0xb8fff5 : 0x3fd7c6);
         fring.rotation.z = t * 0.6; orb.rotation.y = t * 0.7; orb.rotation.x = t * 0.4; holo.position.y = 2.05 + Math.sin(t * 1.3) * 0.02; steam.position.y = 0.95 + ((t * 0.3) % 1) * 0.25; steam.material.opacity = 0.35 * (1 - ((t * 0.3) % 1));
         S2._tt = (S2._tt || 0) + dt;
-        if (S2._tt > 0.4) { S2._tt = 0; drawMon(monTex.userData.ctx, t); monTex.needsUpdate = true; drawHolo(holoTex.userData.ctx, t); holoTex.needsUpdate = true; }
+        if (S2._tt > (MM.lowPower ? 1.2 : 0.4)) { S2._tt = 0; drawMon(monTex.userData.ctx, t); monTex.needsUpdate = true; drawHolo(holoTex.userData.ctx, t); holoTex.needsUpdate = true; }
         rw.update(dt, t);
         rahimIt.pos.set(rahim.position.x, rahim.position.y + 1.6, rahim.position.z);
         if (rahim.visible) { rc.off = false; rc.minX = rahim.position.x - 0.3; rc.maxX = rahim.position.x + 0.3; rc.minZ = rahim.position.z - 0.3; rc.maxZ = rahim.position.z + 0.3; } else rc.off = true;

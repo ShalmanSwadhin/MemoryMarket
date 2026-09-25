@@ -21,10 +21,22 @@
   // (-1..1 each axis, 'active' while a finger is on the stick), sprint = the
   // sprint button held. updatePlayer() below reads this alongside keyboard.
   const TM = MM.TouchInput = { x: 0, y: 0, active: false, sprint: false };
+  // Touch drag events arrive far faster than frames render (and in bursts
+  // while the main thread is busy), so they only accumulate here and are
+  // applied once per frame in updatePlayer() instead of rotating the camera
+  // on every single event.
+  let lookX = 0, lookY = 0;
   E.lookDelta = (dx, dy) => {
     if (MM.mode !== 'play' || MM.paused) return;
-    P.yaw -= dx * 0.0026; P.pitch = MM.clamp(P.pitch - dy * 0.0026, -1.4, 1.4);
+    lookX += dx; lookY += dy;
   };
+
+  // Render-quality knobs. scale = internal resolution multiplier, msaa = the
+  // 4x multisampled scene target, lite = the cheaper post-process shader.
+  // Phones start with the lite post shader and 2x MSAA (desktop 4x); adapt() below
+  // lowers scale and finally drops MSAA if the device can't keep up.
+  const Q = E.quality = { scale: 1, msaa: true, lite: MM.isTouch };
+  let postFull, postLite, postMesh, basePR = 1;
 
   const VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
   const FRAG = `
@@ -45,12 +57,28 @@
       float ca = uChroma + g * 0.014;
       vec2 dir = uv - 0.5;
       vec3 col;
+      vec3 bl = vec3(0.0);
+      vec2 asp = vec2(uRes.y / uRes.x, 1.0);
+#ifdef LITE
+      // phone variant: 1 colour tap (3 only when a glitch/strong aberration
+      // is actually on screen) and 4 bloom taps instead of 16 - about a
+      // quarter of the texture reads per pixel
+      if (ca > 0.006 || g > 0.01) {
+        vec2 d2 = uv - 0.5;
+        col.r = texture2D(tDiffuse, uv + d2 * ca).r;
+        col.g = texture2D(tDiffuse, uv).g;
+        col.b = texture2D(tDiffuse, uv - d2 * ca).b;
+      } else col = texture2D(tDiffuse, uv).rgb;
+      bl += max(texture2D(tDiffuse, uv + vec2( 0.010,  0.010) * asp).rgb - 0.5, 0.0);
+      bl += max(texture2D(tDiffuse, uv + vec2(-0.010,  0.010) * asp).rgb - 0.5, 0.0);
+      bl += max(texture2D(tDiffuse, uv + vec2( 0.010, -0.010) * asp).rgb - 0.5, 0.0);
+      bl += max(texture2D(tDiffuse, uv + vec2(-0.010, -0.010) * asp).rgb - 0.5, 0.0);
+      col += bl * uBloom * 0.20 * 3.4;
+#else
       col.r = texture2D(tDiffuse, uv + dir * ca).r;
       col.g = texture2D(tDiffuse, uv).g;
       col.b = texture2D(tDiffuse, uv - dir * ca).b;
       // cheap bloom
-      vec3 bl = vec3(0.0);
-      vec2 asp = vec2(uRes.y / uRes.x, 1.0);
       for (int i = 0; i < 8; i++) {
         float a = float(i) * 0.785398;
         vec2 o = vec2(cos(a), sin(a)) * asp;
@@ -58,6 +86,7 @@
         bl += max(texture2D(tDiffuse, uv + o * 0.016).rgb - 0.5, 0.0) * 0.7;
       }
       col += bl * uBloom * 0.20;
+#endif
       float l = dot(col, vec3(0.299, 0.587, 0.114));
       col = mix(col, vec3(l), uDesat);
       col *= mix(vec3(1.0), uTint, 0.75);
@@ -79,7 +108,7 @@
     if (rt) rt.dispose();
     const opts = { minFilter: T.LinearFilter, magFilter: T.LinearFilter, format: T.RGBAFormat };
     try {
-      if (renderer.capabilities.isWebGL2 && T.WebGLMultisampleRenderTarget) { rt = new T.WebGLMultisampleRenderTarget(w, h, opts); rt.samples = 4; }
+      if (Q.msaa && renderer.capabilities.isWebGL2 && T.WebGLMultisampleRenderTarget) { rt = new T.WebGLMultisampleRenderTarget(w, h, opts); rt.samples = MM.isTouch ? 2 : 4; }
       else rt = new T.WebGLRenderTarget(w, h, opts);
     } catch (e) { rt = new T.WebGLRenderTarget(w, h, opts); }
     if (postMat) postMat.uniforms.tDiffuse.value = rt.texture;
@@ -89,15 +118,18 @@
     canvas = cv;
     renderer = new T.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', alpha: false });
     MM.lowPower = MM.isTouch; // fewer particles (models.js) and a lower pixel-ratio cap on phones/tablets
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MM.lowPower ? 1.0 : 1.5));
+    basePR = Math.min(window.devicePixelRatio || 1, MM.lowPower ? 1.0 : 1.5);
+    renderer.setPixelRatio(basePR * Q.scale);
+    renderer.info.autoReset = false; // two render() calls per frame; reset once per frame in loop()
     renderer.setClearColor(0x05070c, 1);
     camera = new T.PerspectiveCamera(72, 1, 0.05, 420); camera.rotation.order = 'YXZ';
     postScene = new T.Scene(); postCam = new T.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    postMat = new T.ShaderMaterial({
-      vertexShader: VERT, fragmentShader: FRAG, depthTest: false, depthWrite: false,
-      uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uGlitch: { value: 0 }, uChroma: { value: 0 }, uDesat: { value: 0 }, uVignette: { value: 1 }, uNoise: { value: 0 }, uFlash: { value: 0 }, uAnalyzer: { value: 0 }, uWarp: { value: 0 }, uScan: { value: 0 }, uBloom: { value: 1 }, uTint: { value: new T.Vector3(1, 1, 1) }, uRes: { value: new T.Vector2(1, 1) } }
-    });
-    postScene.add(new T.Mesh(new T.PlaneGeometry(2, 2), postMat));
+    const postUniforms = { tDiffuse: { value: null }, uTime: { value: 0 }, uGlitch: { value: 0 }, uChroma: { value: 0 }, uDesat: { value: 0 }, uVignette: { value: 1 }, uNoise: { value: 0 }, uFlash: { value: 0 }, uAnalyzer: { value: 0 }, uWarp: { value: 0 }, uScan: { value: 0 }, uBloom: { value: 1 }, uTint: { value: new T.Vector3(1, 1, 1) }, uRes: { value: new T.Vector2(1, 1) } };
+    postFull = new T.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, depthTest: false, depthWrite: false, uniforms: postUniforms });
+    postLite = new T.ShaderMaterial({ vertexShader: VERT, fragmentShader: '#define LITE\n' + FRAG, depthTest: false, depthWrite: false, uniforms: postUniforms });
+    postMat = postFull; // uniforms are shared, so postMat.uniforms drives either variant
+    postMesh = new T.Mesh(new T.PlaneGeometry(2, 2), Q.lite ? postLite : postFull);
+    postScene.add(postMesh);
     E.resize();
     window.addEventListener('resize', E.resize);
     window.matchMedia('(orientation: portrait)').addEventListener('change', () => setTimeout(E.resize, 60));
@@ -114,6 +146,9 @@
     const s = renderer.getPixelRatio(); makeRT(Math.floor(w * s), Math.floor(h * s));
     postMat.uniforms.uRes.value.set(w * s, h * s);
   };
+  E.info = () => renderer.info;
+  E.applyQuality = () => { postMesh.material = Q.lite ? postLite : postFull; renderer.setPixelRatio(basePR * Q.scale); E.resize(); };
+  E.scale = () => Q.scale;
   E.camera = () => camera;
   E.scene = () => cur;
   E.time = () => time;
@@ -220,6 +255,7 @@
   let stepT = 0;
   function updatePlayer(dt) {
     if (MM.mode === 'play' && !MM.paused) {
+      if (lookX || lookY) { P.yaw -= lookX * 0.0026; P.pitch = MM.clamp(P.pitch - lookY * 0.0026, -1.4, 1.4); lookX = lookY = 0; }
       const kf = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), ks = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
       const mag = TM.active ? MM.clamp(Math.hypot(TM.x, TM.y), 0, 1) : 1;
       const f = TM.active ? -TM.y : kf, s = TM.active ? TM.x : ks;
@@ -268,9 +304,41 @@
     }
   }
 
+  // ---------- adaptive resolution ----------
+  // Steps the internal render scale down when frames are consistently slow and
+  // cautiously back up after a long comfortable stretch, so weak phones get a
+  // smooth (slightly softer) image instead of a stuttering sharp one, and
+  // strong ones keep full quality. Ignores tab-switch hitches, and a steady
+  // ~33ms cadence (a 30fps battery-saver cap, not a slow GPU).
+  const LEVELS = MM.isTouch ? [1, 0.85, 0.72, 0.6] : [1, 0.85, 0.72, 0.6, 0.5];
+  const ad = { f: [], level: 0, okSince: 0, lastUp: 0, noUpUntil: 0 };
+  function adapt(rawMs, nowMs) {
+    if (E.adaptive === false) return;
+    // >1s = tab switch / a one-off hitch: throw the window away. Everything else
+    // is kept, but the slowest few frames of each window are trimmed so a scene
+    // load or a GC pause can't by itself cause a downgrade.
+    if (rawMs > 1000 || MM.paused || document.hidden) { ad.f.length = 0; return; }
+    ad.f.push(rawMs);
+    if (ad.f.length < 45) return;
+    const sorted = ad.f.slice().sort((x, y) => x - y).slice(0, -5); ad.f.length = 0;
+    const avg = sorted.reduce((x, y) => x + y, 0) / sorted.length;
+    const sd = Math.sqrt(sorted.reduce((x, y) => x + (y - avg) * (y - avg), 0) / sorted.length);
+    const capped30 = avg > 30 && avg < 37 && sd < 2.5;
+    if (avg > 26 && !capped30 && ad.level < LEVELS.length - 1) {
+      if (nowMs - ad.lastUp < 8000) ad.noUpUntil = nowMs + 45000; // stepping back up just failed: don't retry soon
+      ad.level++; ad.okSince = 0; Q.scale = LEVELS[ad.level]; Q.msaa = ad.level < 2; E.applyQuality();
+    } else if (avg < 18.5) {
+      if (!ad.okSince) ad.okSince = nowMs;
+      if (nowMs - ad.okSince > 12000 && ad.level > 0 && nowMs > ad.noUpUntil) {
+        ad.level--; ad.okSince = nowMs; ad.lastUp = nowMs; Q.scale = LEVELS[ad.level]; Q.msaa = ad.level < 2; E.applyQuality();
+      }
+    } else ad.okSince = 0;
+  }
+
   // ---------- main loop ----------
   function loop(now) {
     requestAnimationFrame(loop);
+    adapt(now - last, now);
     const dt = Math.min(window.__dtcap || 0.05, (now - last) / 1000 || 0.016); last = now;
     MM.updateTweens(dt);
     if (!cur) { renderer.setRenderTarget(null); renderer.clear(); return; }
@@ -288,6 +356,7 @@
     u.uTime.value = time; u.uGlitch.value = fx.glitch; u.uChroma.value = fx.chroma; u.uDesat.value = fx.desat; u.uVignette.value = fx.vignette;
     u.uNoise.value = fx.noise; u.uFlash.value = fx.flash; u.uAnalyzer.value = fx.analyzer; u.uWarp.value = fx.warp; u.uScan.value = fx.scan; u.uBloom.value = fx.bloom;
     u.uTint.value.set(fx.tr, fx.tg, fx.tb);
+    renderer.info.reset();
     renderer.setRenderTarget(rt); renderer.render(cur.scene, camera);
     renderer.setRenderTarget(null); renderer.render(postScene, postCam);
   }

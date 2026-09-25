@@ -48,7 +48,7 @@ window.MM = window.MM || {};
     if (!F.isSupported()) fsBtn.style.display = 'none';
 
     stickBase.addEventListener('touchstart', onStickStart, { passive: false });
-    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchmove', onTouchMove, { passive: true }); // passive: nothing here needs preventDefault (touch-action:none in the CSS already stops page scroll/zoom), and a non-passive listener makes the browser wait on this handler before every swipe frame
     window.addEventListener('touchend', onTouchEnd);
     window.addEventListener('touchcancel', onTouchEnd);
 
@@ -101,7 +101,7 @@ window.MM = window.MM || {};
 
   function onTouchMove(e) {
     for (const t of e.changedTouches) {
-      if (t.identifier === moveTouchId) { e.preventDefault(); updateStick(t); }
+      if (t.identifier === moveTouchId) updateStick(t);
       else if (t.identifier === lookTouchId && lookLast) {
         const d = toLocal(t.clientX - lookLast.x, t.clientY - lookLast.y);
         MM.Engine.lookDelta(d.x, d.y);
