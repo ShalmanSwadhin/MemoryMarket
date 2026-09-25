@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bug Reports — Memory Market Admin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<style>
+  :root { --ink:#070a11; --teal:#3fd7c6; --amber:#f2a93b; --hib:#ff4d63; --bone:#e3ebee; --dim:#8b9aa6; --line: rgba(63,215,198,.3); }
+  * { box-sizing: border-box; }
+  html,body { margin:0; background:var(--ink); color:var(--bone); font-family:"Segoe UI",system-ui,sans-serif; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 18px 60px; }
+  h1 { font-size: 22px; letter-spacing: .5px; margin: 0 0 4px; }
+  .sub { color: var(--dim); font-size: 13px; margin-bottom: 24px; }
+  .card { background: rgba(255,255,255,.03); border: 1px solid var(--line); padding: 18px; margin-bottom: 18px; }
+  label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--dim); }
+  input, select, textarea, button { font-family: inherit; font-size: 15px; }
+  input, select, textarea { padding: 9px 10px; background: rgba(0,0,0,.4); border: 1px solid rgba(255,255,255,.2); color: var(--bone); }
+  button { cursor: pointer; padding: 9px 16px; background: transparent; border: 1px solid var(--line); color: var(--bone); }
+  button:hover { background: rgba(63,215,198,.14); border-color: var(--teal); }
+  button.primary { border-color: var(--teal); color: var(--teal); }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
+  .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid rgba(255,255,255,.08); vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+  tr.reportrow { cursor: pointer; } tr.reportrow:hover { background: rgba(63,215,198,.06); }
+  .sev-low{color:var(--dim)} .sev-medium{color:var(--amber)} .sev-high{color:var(--hib)} .sev-critical{color:var(--hib); font-weight:700}
+  .status-pill { display:inline-block; padding: 2px 9px; border: 1px solid; font-size: 12px; }
+  .status-open{border-color:var(--hib); color:#ffc3ca} .status-investigating{border-color:var(--amber); color:var(--amber)}
+  .status-fixed{border-color:var(--teal); color:var(--teal)} .status-closed{border-color:var(--dim); color:var(--dim)}
+  .detail { margin-top: 8px; }
+  .detail dt { color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: .4px; margin-top: 10px; }
+  .detail dd { margin: 3px 0 0; white-space: pre-wrap; }
+  #loginBox { max-width: 360px; margin: 80px auto; }
+  #err { color: #ffc3ca; font-size: 13px; min-height: 18px; }
+  .hide { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="loginBox" class="card hide">
+    <h1>Admin Login</h1>
+    <div class="row" style="flex-direction:column;align-items:stretch;gap:10px">
+      <label>Admin email <input id="lEmail" type="email" autocomplete="username"></label>
+      <label>Password <input id="lPass" type="password" autocomplete="current-password"></label>
+      <div id="err"></div>
+      <button class="primary" id="lGo">Log in</button>
+    </div>
+  </div>
+
+  <div id="dashBox" class="hide">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <div><h1>Bug Reports</h1><div class="sub">Memory Market — admin dashboard</div></div>
+      <button id="logout">Log out</button>
+    </div>
+    <div class="card">
+      <div class="filters">
+        <label>Status <select id="fStatus"><option value="">All</option><option>open</option><option>investigating</option><option>fixed</option><option>closed</option></select></label>
+        <label>Severity <select id="fSev"><option value="">All</option><option>low</option><option>medium</option><option>high</option><option>critical</option></select></label>
+        <label>Chapter <input id="fChapter" type="number" min="0" max="6"></label>
+        <label>Language <select id="fLang"><option value="">All</option><option value="en">English</option><option value="bn">বাংলা</option></select></label>
+      </div>
+      <div class="row"><button class="primary" id="fApply">Apply</button><button id="fClear">Clear</button></div>
+    </div>
+    <div class="card">
+      <table id="tbl"><thead><tr><th>#</th><th>Description</th><th>Severity</th><th>Chapter</th><th>Browser</th><th>Status</th><th>Created</th></tr></thead><tbody id="tbody"></tbody></table>
+      <div id="empty" class="sub hide">No bug reports match these filters.</div>
+    </div>
+    <div id="detailCard" class="card hide"></div>
+  </div>
+</div>
+
+<script>
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $ = (s, r) => (r || document).querySelector(s);
+
+async function api(path, opts) {
+  const res = await fetch(path, Object.assign({ headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' }, opts));
+  let body = {}; try { body = await res.json(); } catch (e) {}
+  return { ok: res.ok, status: res.status, body };
+}
+
+async function checkSession() {
+  const r = await api('/api/admin/me');
+  if (r.ok) { $('#loginBox').classList.add('hide'); $('#dashBox').classList.remove('hide'); loadReports(); }
+  else { $('#dashBox').classList.add('hide'); $('#loginBox').classList.remove('hide'); }
+}
+
+$('#lGo').addEventListener('click', async () => {
+  const email = $('#lEmail').value.trim(), password = $('#lPass').value;
+  const r = await api('/api/admin/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+  if (!r.ok) { $('#err').textContent = r.body.message || 'Login failed.'; return; }
+  $('#err').textContent = ''; checkSession();
+});
+$('#logout').addEventListener('click', async () => { await api('/api/admin/logout', { method: 'POST' }); checkSession(); });
+
+function qs() {
+  const p = new URLSearchParams();
+  const s = $('#fStatus').value, sv = $('#fSev').value, c = $('#fChapter').value, l = $('#fLang').value;
+  if (s) p.set('status', s); if (sv) p.set('severity', sv); if (c) p.set('chapter', c); if (l) p.set('language', l);
+  return p.toString();
+}
+$('#fApply').addEventListener('click', loadReports);
+$('#fClear').addEventListener('click', () => { $('#fStatus').value=''; $('#fSev').value=''; $('#fChapter').value=''; $('#fLang').value=''; loadReports(); });
+
+let cache = {};
+async function loadReports() {
+  const r = await api('/api/admin/bug-reports?' + qs());
+  if (!r.ok) { $('#tbody').innerHTML = ''; $('#empty').textContent = 'Could not load bug reports.'; $('#empty').classList.remove('hide'); return; }
+  const reports = r.body.reports || [];
+  cache = {}; reports.forEach((x) => cache[x.id] = x);
+  $('#empty').classList.toggle('hide', reports.length > 0);
+  $('#tbody').innerHTML = reports.map((x) => `
+    <tr class="reportrow" data-id="${x.id}">
+      <td>#${esc(x.id.slice(0, 8))}</td>
+      <td>${esc((x.description || '').slice(0, 70))}${x.description.length > 70 ? '…' : ''}</td>
+      <td class="sev-${x.severity}">${esc(x.severity)}</td>
+      <td>${x.chapter ?? '—'}</td>
+      <td>${esc(x.browser || '—')}</td>
+      <td><span class="status-pill status-${x.status}">${esc(x.status)}</span></td>
+      <td>${esc(new Date(x.createdAt).toLocaleString())}</td>
+    </tr>`).join('');
+  document.querySelectorAll('.reportrow').forEach((row) => row.addEventListener('click', () => showDetail(row.dataset.id)));
+}
+
+function showDetail(id) {
+  const r = cache[id]; if (!r) return;
+  const card = $('#detailCard'); card.classList.remove('hide');
+  card.innerHTML = `
+    <h2 style="margin-top:0">#${esc(r.id.slice(0, 8))}</h2>
+    <dl class="detail">
+      <dt>Description</dt><dd>${esc(r.description)}</dd>
+      <dt>Steps to reproduce</dt><dd>${esc(r.steps || '—')}</dd>
+      <dt>Severity</dt><dd class="sev-${r.severity}">${esc(r.severity)}</dd>
+      <dt>Device / Browser / OS</dt><dd>${esc(r.device || '—')} / ${esc(r.browser || '—')} / ${esc(r.os || '—')}</dd>
+      <dt>Screen</dt><dd>${r.screenWidth || '—'} × ${r.screenHeight || '—'}</dd>
+      <dt>Game version</dt><dd>${esc(r.gameVersion || '—')}</dd>
+      <dt>Chapter / Language</dt><dd>${r.chapter ?? '—'} / ${esc(r.language || '—')}</dd>
+      <dt>Reporter</dt><dd>${r.userId ? 'Account ' + esc(r.userId.slice(0, 8)) : (r.guestId ? 'Guest ' + esc(r.guestId.slice(0, 8)) : 'Unknown')}${r.contactEmail ? ' · ' + esc(r.contactEmail) : ''}</dd>
+      <dt>Created / Updated</dt><dd>${esc(new Date(r.createdAt).toLocaleString())} / ${esc(new Date(r.updatedAt).toLocaleString())}</dd>
+    </dl>
+    <div class="row" style="margin-top:14px">
+      <label>Status <select id="dStatus">
+        ${['open','investigating','fixed','closed'].map((s) => `<option value="${s}" ${s === r.status ? 'selected' : ''}>${s}</option>`).join('')}
+      </select></label>
+    </div>
+    <label style="margin-top:10px">Developer note <textarea id="dNotes" rows="3" style="width:100%">${esc(r.developerNotes || '')}</textarea></label>
+    <div class="row" style="margin-top:10px"><button class="primary" id="dSave">Save</button><span id="dSaved" class="sub"></span></div>`;
+  $('#dSave').addEventListener('click', async () => {
+    const status = $('#dStatus').value, developerNotes = $('#dNotes').value;
+    const res = await api('/api/admin/bug-reports/' + r.id, { method: 'PATCH', body: JSON.stringify({ status, developerNotes }) });
+    $('#dSaved').textContent = res.ok ? 'Saved.' : 'Could not save.';
+    if (res.ok) loadReports();
+  });
+}
+
+checkSession();
+</script>
+</body>
+</html>
