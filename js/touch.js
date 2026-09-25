@@ -7,15 +7,34 @@ window.MM = window.MM || {};
   const MM = window.MM;
   if (!MM.isTouch) return;
 
-  let root, stickBase, stickKnob, interactBtn, sprintBtn, analyzerBtn, journalBtn;
+  let root, stickBase, stickKnob, interactBtn, sprintBtn, analyzerBtn, journalBtn, fsBtn, rotateOverlay;
   let moveTouchId = null, lookTouchId = null, lookLast = null;
   const BASE_R = 52;
+
+  // ---------- fullscreen (Fullscreen API, cross-vendor) ----------
+  const fsEl = () => document.documentElement;
+  const F = MM.Fullscreen = {
+    isSupported() { return !!(fsEl().requestFullscreen || fsEl().webkitRequestFullscreen); },
+    isActive() { return !!(document.fullscreenElement || document.webkitFullscreenElement); },
+    async request() {
+      try {
+        if (fsEl().requestFullscreen) await fsEl().requestFullscreen();
+        else if (fsEl().webkitRequestFullscreen) fsEl().webkitRequestFullscreen();
+      } catch (e) { /* denied, or unsupported (older iOS Safari) - fine, the rotate overlay is the real fallback */ }
+      try { if (screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape'); } catch (e) { /* iOS Safari never supports this - expected */ }
+    },
+    exit() {
+      try { if (document.exitFullscreen) document.exitFullscreen(); else if (document.webkitExitFullscreen) document.webkitExitFullscreen(); } catch (e) { }
+    },
+    toggle() { if (F.isActive()) F.exit(); else F.request(); }
+  };
 
   function build() {
     root = MM.el('div'); root.id = 'touchpad';
     root.innerHTML = `
       <div id="tp-stick"><div id="tp-knob"></div></div>
       <div id="tp-actions">
+        <button id="tp-fs" class="tpbtn small" title="Fullscreen"><i class="fsicon"></i></button>
         <button id="tp-sprint" class="tpbtn">SPRINT</button>
         <button id="tp-analyzer" class="tpbtn">Q</button>
         <button id="tp-journal" class="tpbtn">≡</button>
@@ -25,6 +44,8 @@ window.MM = window.MM || {};
     stickBase = MM.$('#tp-stick', root); stickKnob = MM.$('#tp-knob', root);
     interactBtn = MM.$('#tp-interact', root); sprintBtn = MM.$('#tp-sprint', root);
     analyzerBtn = MM.$('#tp-analyzer', root); journalBtn = MM.$('#tp-journal', root);
+    fsBtn = MM.$('#tp-fs', root);
+    if (!F.isSupported()) fsBtn.style.display = 'none';
 
     stickBase.addEventListener('touchstart', onStickStart, { passive: false });
     window.addEventListener('touchmove', onTouchMove, { passive: false });
@@ -36,9 +57,27 @@ window.MM = window.MM || {};
     sprintBtn.addEventListener('touchend', () => { MM.TouchInput.sprint = false; sprintBtn.classList.remove('on'); });
     analyzerBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (MM.mode === 'play' && !MM.paused) MM.emit('analyzer'); });
     journalBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (MM.mode === 'play' || MM.UI.journalOpen) MM.UI.toggleJournal(); });
+    fsBtn.addEventListener('touchstart', (e) => { e.preventDefault(); MM.Audio.click(); F.toggle(); });
+    document.addEventListener('fullscreenchange', () => fsBtn.classList.toggle('on', F.isActive()));
+    document.addEventListener('webkitfullscreenchange', () => fsBtn.classList.toggle('on', F.isActive()));
 
     // advance dialogue / choose panel items already work via click listeners
     // elsewhere in the UI (pointerdown/click), which touch already synthesizes.
+  }
+
+  // ---------- rotate-to-landscape prompt ----------
+  // There is no reliable cross-browser way to force device orientation (iOS
+  // Safari never supports screen.orientation.lock, even in fullscreen), so
+  // the actual fix is a full-screen blocking prompt driven by a pure CSS
+  // media query (see css/style.css) - this is the standard, honest pattern
+  // for a landscape-only game. Just needs the element to exist.
+  function buildRotateOverlay() {
+    rotateOverlay = MM.el('div'); rotateOverlay.id = 'rotate-overlay';
+    rotateOverlay.innerHTML = '<div class="rico"><i></i><i></i></div><div class="rotxt"></div>';
+    document.body.appendChild(rotateOverlay);
+    const txt = MM.$('.rotxt', rotateOverlay);
+    const refresh = () => { txt.textContent = MM.L('ui.rotateDevice'); };
+    refresh(); MM.on('lang', refresh);
   }
 
   function stickCenter() { const r = stickBase.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
@@ -112,6 +151,7 @@ window.MM = window.MM || {};
   window.addEventListener('DOMContentLoaded', () => {
     document.body.classList.add('touch');
     build();
+    buildRotateOverlay();
     bindLook();
     requestAnimationFrame(loop);
   });

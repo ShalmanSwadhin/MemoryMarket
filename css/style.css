@@ -271,6 +271,23 @@ body.touch #crosshair, body.touch #lockhint { display: none; }
 body.touch #objective { top: max(20px, env(safe-area-inset-top)); }
 body.touch #chips { top: max(20px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right)); }
 
+.tpbtn.small { min-width: 44px; min-height: 44px; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; }
+.tpbtn.small.on { border-color: var(--teal); color: var(--teal); background: rgba(63, 215, 198, .22); }
+.fsicon { position: relative; width: 16px; height: 16px; }
+.fsicon::before, .fsicon::after { content: ''; position: absolute; width: 7px; height: 7px; border: 2px solid currentColor; }
+.fsicon::before { top: 0; left: 0; border-right: 0; border-bottom: 0; }
+.fsicon::after { bottom: 0; right: 0; border-left: 0; border-top: 0; }
+
+/* ---------- rotate-to-landscape prompt (mobile only, portrait only) ---------- */
+#rotate-overlay { display: none; position: fixed; inset: 0; z-index: 999; background: #05070c; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; gap: 22px; }
+@media (orientation: portrait) { body.touch #rotate-overlay { display: flex; } }
+.rico { position: relative; width: 64px; height: 64px; }
+.rico i { position: absolute; left: 50%; top: 50%; display: block; border: 2.5px solid var(--teal); border-radius: 4px; }
+.rico i:first-child { width: 34px; height: 54px; margin: -27px 0 0 -17px; opacity: .35; }
+.rico i:last-child { width: 54px; height: 34px; margin: -17px 0 0 -27px; animation: ricoRotate 1.8s ease-in-out infinite; }
+@keyframes ricoRotate { 0%, 15% { transform: rotate(-90deg) scale(.63); opacity: 0; } 45%, 65% { transform: rotate(0deg) scale(1); opacity: 1; } 100% { transform: rotate(0deg) scale(1); opacity: 1; } }
+.rotxt { font-size: 17px; color: var(--dim); max-width: 280px; }
+
 /* ---------- responsive breakpoints ---------- */
 @media (max-width: 768px) {
   .tt { font-size: clamp(38px, 11vw, 64px); }

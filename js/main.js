@@ -26,6 +26,7 @@
   function chooseLang(lang) {
     MM.I18n.setLang(lang);
     A.init(); A.click();
+    if (MM.isTouch && MM.Fullscreen) MM.Fullscreen.request();
     MM.$('#langscreen').classList.remove('on');
     MM.$('#title').classList.add('on');
     refreshStatic();
@@ -125,6 +126,7 @@
   async function begin(resume) {
     const t = MM.$('#title');
     A.init(); applyAudioSettings(); A.click();
+    if (MM.isTouch && MM.Fullscreen) MM.Fullscreen.request();
     t.classList.remove('on');
     const O = MM.Scenes.office.get(); O.att = false;
     E.markStarted();

@@ -31,7 +31,8 @@ window.MM.Locale.bn = {
     close: 'বন্ধ করুন', loading: 'লোড হচ্ছে…',
     somethingWrong: 'কিছু একটা ভুল হয়েছে: {msg}',
     recordsUnread: 'অপঠিত রেকর্ড: ৫টির মধ্যে {n}টি', registryReviewed: 'রেজিস্ট্রি সম্পূর্ণ পর্যালোচিত হয়েছে। চালিয়ে যেতে টার্মিনাল বন্ধ করুন।',
-    chamberUnlocked: 'চেম্বারের দরজা খুলে গেছে'
+    chamberUnlocked: 'চেম্বারের দরজা খুলে গেছে',
+    rotateDevice: 'খেলতে আপনার ডিভাইসটি ল্যান্ডস্কেপ অবস্থানে ঘোরান'
   },
 
   auth: {
