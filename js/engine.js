@@ -100,11 +100,16 @@
     postScene.add(new T.Mesh(new T.PlaneGeometry(2, 2), postMat));
     E.resize();
     window.addEventListener('resize', E.resize);
+    window.matchMedia('(orientation: portrait)').addEventListener('change', () => setTimeout(E.resize, 60));
     bindInput();
     requestAnimationFrame(loop);
   };
   E.resize = () => {
-    const w = window.innerWidth, h = window.innerHeight;
+    // a touch device held upright is drawn rotated by CSS (css/style.css,
+    // "always-landscape"), so the drawing surface is the viewport with its
+    // width and height swapped
+    const swap = MM.isTouch && window.matchMedia('(orientation: portrait)').matches;
+    const w = swap ? window.innerHeight : window.innerWidth, h = swap ? window.innerWidth : window.innerHeight;
     renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
     const s = renderer.getPixelRatio(); makeRT(Math.floor(w * s), Math.floor(h * s));
     postMat.uniforms.uRes.value.set(w * s, h * s);

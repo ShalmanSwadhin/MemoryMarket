@@ -30,8 +30,7 @@ window.MM.Locale.en = {
     close: 'Close', loading: 'Loading…',
     somethingWrong: 'Something went wrong: {msg}',
     recordsUnread: 'Records unread: {n} of 5', registryReviewed: 'Registry fully reviewed. Close the terminal to continue.',
-    chamberUnlocked: 'The chamber door has unlocked',
-    rotateDevice: 'Rotate your device to landscape to play'
+    chamberUnlocked: 'The chamber door has unlocked'
   },
 
   auth: {

@@ -7,7 +7,7 @@ window.MM = window.MM || {};
   const MM = window.MM;
   if (!MM.isTouch) return;
 
-  let root, stickBase, stickKnob, interactBtn, sprintBtn, analyzerBtn, journalBtn, fsBtn, rotateOverlay;
+  let root, stickBase, stickKnob, interactBtn, sprintBtn, analyzerBtn, journalBtn, fsBtn;
   let moveTouchId = null, lookTouchId = null, lookLast = null;
   const BASE_R = 52;
 
@@ -65,20 +65,11 @@ window.MM = window.MM || {};
     // elsewhere in the UI (pointerdown/click), which touch already synthesizes.
   }
 
-  // ---------- rotate-to-landscape prompt ----------
-  // There is no reliable cross-browser way to force device orientation (iOS
-  // Safari never supports screen.orientation.lock, even in fullscreen), so
-  // the actual fix is a full-screen blocking prompt driven by a pure CSS
-  // media query (see css/style.css) - this is the standard, honest pattern
-  // for a landscape-only game. Just needs the element to exist.
-  function buildRotateOverlay() {
-    rotateOverlay = MM.el('div'); rotateOverlay.id = 'rotate-overlay';
-    rotateOverlay.innerHTML = '<div class="rico"><i></i><i></i></div><div class="rotxt"></div>';
-    document.body.appendChild(rotateOverlay);
-    const txt = MM.$('.rotxt', rotateOverlay);
-    const refresh = () => { txt.textContent = MM.L('ui.rotateDevice'); };
-    refresh(); MM.on('lang', refresh);
-  }
+  // Held upright, the page is drawn rotated 90deg by CSS (see "always-landscape"
+  // in css/style.css), so screen-space touch deltas must be mapped into the
+  // rotated layout's axes: its +x is screen-down, its +y is screen-left.
+  const forced = () => window.matchMedia('(orientation: portrait)').matches;
+  const toLocal = (sx, sy) => (forced() ? { x: sy, y: -sx } : { x: sx, y: sy });
 
   function stickCenter() { const r = stickBase.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
 
@@ -90,9 +81,10 @@ window.MM = window.MM || {};
   }
   function updateStick(t) {
     const c = stickCenter();
-    let dx = t.clientX - c.x, dy = t.clientY - c.y;
-    const d = Math.hypot(dx, dy);
-    if (d > BASE_R) { dx = dx / d * BASE_R; dy = dy / d * BASE_R; }
+    let sdx = t.clientX - c.x, sdy = t.clientY - c.y;
+    const d = Math.hypot(sdx, sdy);
+    if (d > BASE_R) { sdx = sdx / d * BASE_R; sdy = sdy / d * BASE_R; }
+    const { x: dx, y: dy } = toLocal(sdx, sdy);
     stickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
     MM.TouchInput.x = MM.clamp(dx / BASE_R, -1, 1);
     MM.TouchInput.y = MM.clamp(dy / BASE_R, -1, 1);
@@ -111,8 +103,8 @@ window.MM = window.MM || {};
     for (const t of e.changedTouches) {
       if (t.identifier === moveTouchId) { e.preventDefault(); updateStick(t); }
       else if (t.identifier === lookTouchId && lookLast) {
-        const dx = t.clientX - lookLast.x, dy = t.clientY - lookLast.y;
-        MM.Engine.lookDelta(dx, dy);
+        const d = toLocal(t.clientX - lookLast.x, t.clientY - lookLast.y);
+        MM.Engine.lookDelta(d.x, d.y);
         lookLast = { x: t.clientX, y: t.clientY };
       }
     }
@@ -151,8 +143,11 @@ window.MM = window.MM || {};
   window.addEventListener('DOMContentLoaded', () => {
     document.body.classList.add('touch');
     build();
-    buildRotateOverlay();
     bindLook();
+    // Fullscreen needs a real user gesture: ask on the very first tap so it
+    // applies from the language screen on, and returning players (who skip
+    // that screen) are covered too. The button in the controls toggles it.
+    window.addEventListener('touchend', () => F.request(), { once: true });
     requestAnimationFrame(loop);
   });
 })();

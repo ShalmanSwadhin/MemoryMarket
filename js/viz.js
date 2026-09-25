@@ -22,7 +22,7 @@
       let W = 0, H = 0, mouse = null, alive = true, t0 = performance.now(), traceAt = -1, traced = 0;
       const size = () => { W = cv.clientWidth || 600; H = cv.clientHeight || 340; cv.width = W * dpr; cv.height = H * dpr; g.setTransform(dpr, 0, 0, dpr, 0, 0); };
       size();
-      cv.addEventListener('mousemove', (e) => { const r = cv.getBoundingClientRect(); mouse = { x: e.clientX - r.left, y: e.clientY - r.top }; });
+      cv.addEventListener('mousemove', (e) => { mouse = { x: e.offsetX, y: e.offsetY }; }); /* offsetX/Y stay correct inside the rotated touch layout */
       cv.addEventListener('mouseleave', () => { mouse = null; });
       function frame(now) {
         if (!alive || !document.body.contains(cv)) return;
