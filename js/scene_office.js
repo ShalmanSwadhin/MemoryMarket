@@ -201,7 +201,7 @@
       await MM.Flow.card('Chapter 1', 'The Broker', 'Memory Market · Dhaka, 2087', () => { E.loadScene(S2, { snapFx: true }); A.scene('none', 0.1); });
       A.scene('office', 2.5); UI.showHUD(true); UI.refreshHUD(); UI.tools('');
       await UI.fade(0, 1600); E.markStarted(); MM.setMode('play');
-      UI.toast('WASD move  ·  Mouse look  ·  E interact  ·  Tab evidence journal', 'tool', 7000);
+      UI.toast(MM.isTouch ? 'Left stick to move  ·  Drag to look  ·  INTERACT button  ·  ≡ for the evidence journal' : 'WASD move  ·  Mouse look  ·  E interact  ·  Tab evidence journal', 'tool', 7000);
       MM.busy = true; await UI.sayAll([['', 'MEMORY MARKET. Broker Station M-09. Dhaka, 2087. It has been raining for eleven days.'], ['M-09', 'Memories are the only thing people still pay to lose.']]);
       MM.busy = false;
       UI.objective('Start your shift', 'Use the workstation');

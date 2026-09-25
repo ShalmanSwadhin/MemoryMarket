@@ -1,0 +1,118 @@
+/* MEMORY MARKET — mobile touch controls: a virtual joystick for movement,
+   drag-anywhere-else for camera look, and a context-sensitive interact
+   button, all built specifically for touch (not just a shrunk desktop UI).
+   Inert entirely on non-touch devices. */
+window.MM = window.MM || {};
+(function () {
+  const MM = window.MM;
+  if (!MM.isTouch) return;
+
+  let root, stickBase, stickKnob, interactBtn, sprintBtn, analyzerBtn, journalBtn;
+  let moveTouchId = null, lookTouchId = null, lookLast = null;
+  const BASE_R = 52;
+
+  function build() {
+    root = MM.el('div'); root.id = 'touchpad';
+    root.innerHTML = `
+      <div id="tp-stick"><div id="tp-knob"></div></div>
+      <div id="tp-actions">
+        <button id="tp-sprint" class="tpbtn">SPRINT</button>
+        <button id="tp-analyzer" class="tpbtn">Q</button>
+        <button id="tp-journal" class="tpbtn">≡</button>
+      </div>
+      <button id="tp-interact" class="tpbtn big">INTERACT</button>`;
+    document.body.appendChild(root);
+    stickBase = MM.$('#tp-stick', root); stickKnob = MM.$('#tp-knob', root);
+    interactBtn = MM.$('#tp-interact', root); sprintBtn = MM.$('#tp-sprint', root);
+    analyzerBtn = MM.$('#tp-analyzer', root); journalBtn = MM.$('#tp-journal', root);
+
+    stickBase.addEventListener('touchstart', onStickStart, { passive: false });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('touchcancel', onTouchEnd);
+
+    interactBtn.addEventListener('touchstart', (e) => { e.preventDefault(); MM.Audio.click(); if (MM.Engine.target) MM.Engine.use(MM.Engine.target); }, { passive: false });
+    sprintBtn.addEventListener('touchstart', (e) => { e.preventDefault(); MM.TouchInput.sprint = true; sprintBtn.classList.add('on'); });
+    sprintBtn.addEventListener('touchend', () => { MM.TouchInput.sprint = false; sprintBtn.classList.remove('on'); });
+    analyzerBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (MM.mode === 'play' && !MM.paused) MM.emit('analyzer'); });
+    journalBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (MM.mode === 'play' || MM.UI.journalOpen) MM.UI.toggleJournal(); });
+
+    // advance dialogue / choose panel items already work via click listeners
+    // elsewhere in the UI (pointerdown/click), which touch already synthesizes.
+  }
+
+  function stickCenter() { const r = stickBase.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
+
+  function onStickStart(e) {
+    e.preventDefault();
+    if (moveTouchId !== null) return;
+    const t = e.changedTouches[0]; moveTouchId = t.identifier;
+    updateStick(t);
+  }
+  function updateStick(t) {
+    const c = stickCenter();
+    let dx = t.clientX - c.x, dy = t.clientY - c.y;
+    const d = Math.hypot(dx, dy);
+    if (d > BASE_R) { dx = dx / d * BASE_R; dy = dy / d * BASE_R; }
+    stickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+    MM.TouchInput.x = MM.clamp(dx / BASE_R, -1, 1);
+    MM.TouchInput.y = MM.clamp(dy / BASE_R, -1, 1);
+    MM.TouchInput.active = true;
+  }
+  function resetStick() {
+    moveTouchId = null; MM.TouchInput.active = false; MM.TouchInput.x = 0; MM.TouchInput.y = 0;
+    stickKnob.style.transform = 'translate(0,0)';
+  }
+
+  function inLookZone(target) {
+    return !!target.closest && !target.closest('#touchpad') && !target.closest('.layer.on') && !target.closest('#panels') && !target.closest('#choices.on') && !target.closest('#mnemos.on') && !target.closest('#debate.on');
+  }
+
+  function onTouchMove(e) {
+    for (const t of e.changedTouches) {
+      if (t.identifier === moveTouchId) { e.preventDefault(); updateStick(t); }
+      else if (t.identifier === lookTouchId && lookLast) {
+        const dx = t.clientX - lookLast.x, dy = t.clientY - lookLast.y;
+        MM.Engine.lookDelta(dx, dy);
+        lookLast = { x: t.clientX, y: t.clientY };
+      }
+    }
+  }
+  function onTouchEnd(e) {
+    for (const t of e.changedTouches) {
+      if (t.identifier === moveTouchId) resetStick();
+      if (t.identifier === lookTouchId) { lookTouchId = null; lookLast = null; }
+    }
+  }
+
+  // Look-drag: any touch that starts outside the joystick/buttons/open UI.
+  // Bound on the view canvas itself (added once E.init() has created it).
+  MM.on('mode', () => { /* no-op hook point; controls visibility handled below */ });
+
+  function bindLook() {
+    const canvas = MM.$('#view');
+    canvas.addEventListener('touchstart', (e) => {
+      if (MM.mode !== 'play' || MM.paused) return;
+      for (const t of e.changedTouches) {
+        if (t.identifier === moveTouchId) continue;
+        if (lookTouchId === null && inLookZone(t.target)) { lookTouchId = t.identifier; lookLast = { x: t.clientX, y: t.clientY }; }
+      }
+    }, { passive: true });
+  }
+
+  function updateVisibility() {
+    const show = MM.mode === 'play' && !MM.paused;
+    root.classList.toggle('on', show);
+    const canInteract = show && !!MM.Engine.target;
+    interactBtn.classList.toggle('ready', canInteract);
+  }
+
+  function loop() { if (root) updateVisibility(); requestAnimationFrame(loop); }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    document.body.classList.add('touch');
+    build();
+    bindLook();
+    requestAnimationFrame(loop);
+  });
+})();

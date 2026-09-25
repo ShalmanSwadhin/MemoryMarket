@@ -16,6 +16,15 @@
   E.glitch = (strength, decay) => { fx.glitch = Math.max(fx.glitch, strength); E._gdecay = decay || 5; };
 
   const P = MM.Player = { pos: new T.Vector3(0, 1.65, 0), yaw: 0, pitch: 0, bob: 0, vel: new T.Vector3(), sprint: false };
+  MM.isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  // touch input state, written by js/touch.js: x/y = virtual-joystick vector
+  // (-1..1 each axis, 'active' while a finger is on the stick), sprint = the
+  // sprint button held. updatePlayer() below reads this alongside keyboard.
+  const TM = MM.TouchInput = { x: 0, y: 0, active: false, sprint: false };
+  E.lookDelta = (dx, dy) => {
+    if (MM.mode !== 'play' || MM.paused) return;
+    P.yaw -= dx * 0.0026; P.pitch = MM.clamp(P.pitch - dy * 0.0026, -1.4, 1.4);
+  };
 
   const VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
   const FRAG = `
@@ -79,7 +88,8 @@
   E.init = (cv) => {
     canvas = cv;
     renderer = new T.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', alpha: false });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    MM.lowPower = MM.isTouch; // fewer particles (models.js) and a lower pixel-ratio cap on phones/tablets
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MM.lowPower ? 1.0 : 1.5));
     renderer.setClearColor(0x05070c, 1);
     camera = new T.PerspectiveCamera(72, 1, 0.05, 420); camera.rotation.order = 'YXZ';
     postScene = new T.Scene(); postCam = new T.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -141,6 +151,7 @@
   };
   E.unlock = () => { if (document.pointerLockElement) { E._intent = true; try { document.exitPointerLock(); } catch (e) { } } };
   E.relock = () => {
+    if (MM.isTouch) return; // touch devices look via drag (js/touch.js), no pointer lock involved
     if (MM.mode !== 'play' || document.pointerLockElement === canvas) return;
     try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => { }); } catch (e) { }
     setTimeout(() => { if (MM.mode === 'play' && document.pointerLockElement !== canvas && started && !MM.paused) MM.UI.lockHint(true); }, 350);
@@ -204,10 +215,12 @@
   let stepT = 0;
   function updatePlayer(dt) {
     if (MM.mode === 'play' && !MM.paused) {
-      const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
+      const kf = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), ks = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
+      const mag = TM.active ? MM.clamp(Math.hypot(TM.x, TM.y), 0, 1) : 1;
+      const f = TM.active ? -TM.y : kf, s = TM.active ? TM.x : ks;
       if (keys.ArrowLeft) P.yaw += dt * 1.9; if (keys.ArrowRight) P.yaw -= dt * 1.9;
       if (keys.ArrowUp) P.pitch = Math.min(1.4, P.pitch + dt * 1.4); if (keys.ArrowDown) P.pitch = Math.max(-1.4, P.pitch - dt * 1.4);
-      const sp = (keys.ShiftLeft || keys.ShiftRight) ? 4.0 : 2.5;
+      const sp = ((keys.ShiftLeft || keys.ShiftRight || TM.sprint) ? 4.0 : 2.5) * mag;
       let wx = 0, wz = 0;
       if (f || s) {
         const len = Math.hypot(f, s);
@@ -237,7 +250,7 @@
       }
     }
     E.target = best;
-    if (best) { const lab = typeof best.label === 'function' ? best.label() : best.label; MM.UI.prompt('<b>E</b>&nbsp; ' + lab, true); }
+    if (best) { const lab = typeof best.label === 'function' ? best.label() : best.label; MM.UI.prompt('<b>E</b>&nbsp; ' + MM.Tr(lab), true); }
     else if (MM.mode === 'play' || MM.busy) MM.UI.prompt('');
     for (const it of S.interactables) {
       const s = it.marker; if (!s) continue;

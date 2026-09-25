@@ -170,6 +170,7 @@
 
   // ---------- rain ----------
   M.buildRain = (scene, b, count, color) => {
+    if (MM.lowPower) count = Math.round(count * 0.45);
     const pos = new Float32Array(count * 6), sp = new Float32Array(count);
     const rnd = MM.rng(5);
     for (let i = 0; i < count; i++) {
@@ -272,6 +273,7 @@
     return { group: g, blades };
   };
   M.floaters = (scene, box, count, color, size) => {
+    if (MM.lowPower) count = Math.round(count * 0.5);
     const pos = new Float32Array(count * 3), base = new Float32Array(count * 3), ph = new Float32Array(count);
     const rnd = MM.rng(21);
     for (let i = 0; i < count; i++) { const x = box.x0 + rnd() * (box.x1 - box.x0), y = box.y0 + rnd() * (box.y1 - box.y0), z = box.z0 + rnd() * (box.z1 - box.z0); base.set([x, y, z], i * 3); pos.set([x, y, z], i * 3); ph[i] = rnd() * 6.28; }
