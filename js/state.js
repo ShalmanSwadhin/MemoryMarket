@@ -2,6 +2,7 @@
 (function () {
   const MM = window.MM;
   const KEY = 'memory_market_v1';
+  const SAVE_KEY = 'memory_market_save_v1';
 
   const S = MM.State = {
     chapter: 0,
@@ -50,7 +51,26 @@
     save() {
       try { localStorage.setItem(KEY, JSON.stringify({ settings: S.settings, endingsSeen: S.endingsSeen })); } catch (e) { }
     },
-    markEnding(id) { S.endingsSeen[id] = true; S.save(); }
+    markEnding(id) { S.endingsSeen[id] = true; S.save(); },
+
+    // ---------- mid-game progress (chapter boundaries) ----------
+    saveProgress() {
+      try {
+        localStorage.setItem(SAVE_KEY, JSON.stringify({
+          v: 1, chapter: S.chapter, evidence: S.evidence, contradictions: S.contradictions, flags: S.flags, topics: S.topics
+        }));
+      } catch (e) { /* storage unavailable: fine */ }
+    },
+    loadSavedProgress() {
+      try {
+        const raw = localStorage.getItem(SAVE_KEY);
+        if (!raw) return null;
+        const o = JSON.parse(raw);
+        if (!o || o.v !== 1 || !o.chapter) return null;
+        return o;
+      } catch (e) { return null; }
+    },
+    clearProgress() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { } }
   };
   S.reset();
 })();
