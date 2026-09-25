@@ -18,10 +18,25 @@
   function menuMain() {
     const m = MM.$('#tmenu');
     const seen = Object.keys(MM.State.endingsSeen).length;
-    m.innerHTML = `<button class="btn primary" id="mbegin">Begin</button><button class="btn" id="mopt">Options</button><button class="btn" id="mkeys">Controls</button>` + (seen ? `<div class="found" style="color:var(--dim);font-size:14px;margin-top:6px">Endings found: ${seen} of 4</div>` : '');
-    MM.$('#mbegin').addEventListener('click', begin);
+    const save = MM.State.loadSavedProgress();
+    const play = save
+      ? `<button class="btn primary" id="mcontinue">Continue &middot; Chapter ${save.chapter}</button><button class="btn" id="mnew">New game</button>`
+      : `<button class="btn primary" id="mbegin">Begin</button>`;
+    m.innerHTML = play + `<button class="btn" id="mopt">Options</button><button class="btn" id="mkeys">Controls</button>` + (seen ? `<div class="found" style="color:var(--dim);font-size:14px;margin-top:6px">Endings found: ${seen} of 4</div>` : '');
+    if (save) {
+      MM.$('#mcontinue').addEventListener('click', () => begin(save));
+      MM.$('#mnew').addEventListener('click', () => { A.init(); A.click(); menuConfirmNew(); });
+    } else {
+      MM.$('#mbegin').addEventListener('click', () => begin());
+    }
     MM.$('#mopt').addEventListener('click', () => { A.init(); A.click(); menuOpts(); });
     MM.$('#mkeys').addEventListener('click', () => { A.init(); A.click(); menuKeys(); });
+  }
+  function menuConfirmNew() {
+    const m = MM.$('#tmenu');
+    m.innerHTML = `<div class="opts"><p style="color:var(--dim);font-size:15px;margin:0 0 14px">Start a new game? Your saved progress will be lost.</p></div><button class="btn primary" id="cnew">Start new game</button><button class="btn" id="cback">Cancel</button>`;
+    MM.$('#cnew').addEventListener('click', () => { A.click(); MM.State.clearProgress(); begin(); });
+    MM.$('#cback').addEventListener('click', () => { A.click(); menuMain(); });
   }
   function menuOpts() {
     const S = MM.State.settings, m = MM.$('#tmenu');
@@ -37,13 +52,13 @@
     MM.$('#kback').addEventListener('click', () => { A.click(); m.style.width = ''; menuMain(); });
   }
 
-  async function begin() {
+  async function begin(resume) {
     const t = MM.$('#title');
     A.init(); A.setVolume(MM.State.settings.volume); A.setTTS(MM.State.settings.tts); A.click();
     t.classList.remove('on');
     const O = MM.Scenes.office.get(); O.att = false;
     E.markStarted();
-    MM.Game.start();
+    MM.Game.start(resume);
   }
 
   function boot() {
