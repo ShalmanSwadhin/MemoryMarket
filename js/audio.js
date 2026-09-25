@@ -2,11 +2,19 @@
 (function () {
   const MM = window.MM;
   let ctx = null, master = null, comp = null, reverb = null, revSend = null;
+  let musicBus = null, ambienceBus = null, sfxBus = null, dialogueBus = null;
   let noiseBuf = null, brownBuf = null;
   const L = {};            // layers {g: GainNode, ...}
   let rainLP = null, fanLP = null;
   let heartTimer = null, heartLevel = 0, horns = null;
   let volume = 0.8, ttsOn = true, sfxOn = true, curScene = 'none', voice = null;
+  let busVol = { music: 0.8, ambience: 0.8, sfx: 0.8, dialogue: 0.9 };
+  // bus routing: which mixer bus each ambient layer belongs to. Rain, city,
+  // electrical hum and the fan are environmental "ambience" - explicitly the
+  // audio a long session should be able to mute (rain especially) without
+  // losing interaction/story feedback. The dreamlike memory pad and the
+  // chamber drone are the closest thing this game has to "music".
+  const LAYER_BUS = { rain: 'ambience', city: 'ambience', hum: 'ambience', fan: 'ambience', heart: 'ambience', pad: 'music', chamber: 'music' };
 
   function noiseBuffer(kind, secs) {
     const n = Math.floor(ctx.sampleRate * secs);
@@ -43,6 +51,10 @@
       if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
       try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { ctx = null; return; }
       master = ctx.createGain(); master.gain.value = volume;
+      musicBus = ctx.createGain(); musicBus.gain.value = busVol.music; musicBus.connect(master);
+      ambienceBus = ctx.createGain(); ambienceBus.gain.value = busVol.ambience; ambienceBus.connect(master);
+      sfxBus = ctx.createGain(); sfxBus.gain.value = busVol.sfx; sfxBus.connect(master);
+      dialogueBus = ctx.createGain(); dialogueBus.gain.value = busVol.dialogue;
       comp = ctx.createDynamicsCompressor();
       master.connect(comp); comp.connect(ctx.destination);
       reverb = ctx.createConvolver(); reverb.buffer = impulse(3.2, 2.6);
@@ -50,7 +62,7 @@
       reverb.connect(revSend); revSend.connect(master);
       noiseBuf = noiseBuffer('white', 2.5); brownBuf = noiseBuffer('brown', 4);
 
-      const mk = (name) => { const g = ctx.createGain(); g.gain.value = 0; g.connect(master); L[name] = { g }; return g; };
+      const mk = (name) => { const g = ctx.createGain(); g.gain.value = 0; g.connect(LAYER_BUS[name] === 'music' ? musicBus : ambienceBus); L[name] = { g }; return g; };
 
       // rain: hiss + roof drum
       let g = mk('rain');
@@ -108,6 +120,20 @@
     setTTS(on) { ttsOn = on; if (!on && window.speechSynthesis) speechSynthesis.cancel(); },
     getTTS() { return ttsOn; },
 
+    // ---------- bus volumes: Music / Ambience / SFX / Dialogue ----------
+    // "Music OFF" (bus === 'music', v === 0) silences the memory pad and the
+    // debate-chamber drone; "Ambience OFF" silences rain, city, hum and the
+    // fan - the continuous loops that get tiring on a long session. SFX
+    // (interaction/UI/scanner/notification sounds) and Dialogue (MNEMOS's
+    // spoken voice) are separate buses so turning either of the above off
+    // never removes essential gameplay feedback.
+    setBusVolume(bus, v) {
+      busVol[bus] = v;
+      const node = { music: musicBus, ambience: ambienceBus, sfx: sfxBus, dialogue: dialogueBus }[bus];
+      if (node) node.gain.setTargetAtTime(v, ctx.currentTime, 0.05);
+    },
+    getBusVolume(bus) { return busVol[bus]; },
+
     scene(name, fade) {
       curScene = name; if (!ctx) return;
       fade = fade === undefined ? 1.6 : fade;
@@ -140,34 +166,36 @@
         const g = ctx.createGain(); g.gain.setValueAtTime(0, t + d);
         g.gain.linearRampToValueAtTime(heartLevel * (i ? 0.7 : 1) * 0.9, t + d + 0.02);
         g.gain.exponentialRampToValueAtTime(0.001, t + d + 0.25);
-        o.connect(g); g.connect(master); o.start(t + d); o.stop(t + d + 0.3);
+        o.connect(g); g.connect(ambienceBus); o.start(t + d); o.stop(t + d + 0.3);
       });
     },
     _cityEvent() {
       if (!ctx || (curScene !== 'office' && curScene !== 'title')) return;
-      // distant hover-transport whoosh or horn
+      // distant hover-transport whoosh or horn - ambience, like the city loop it punctuates
       const t = ctx.currentTime;
       if (Math.random() < 0.5) {
         const s = ctx.createBufferSource(); s.buffer = noiseBuf; const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 3;
         f.frequency.setValueAtTime(300, t); f.frequency.exponentialRampToValueAtTime(1500, t + 2.4);
         const g = ctx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.06, t + 1.1); g.gain.linearRampToValueAtTime(0, t + 2.6);
-        s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t + 2.7);
+        s.connect(f); f.connect(g); g.connect(ambienceBus); s.start(t); s.stop(t + 2.7);
       } else {
         const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = 330; const g = ctx.createGain();
         const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500;
         g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.03, t + 0.05); g.gain.linearRampToValueAtTime(0, t + 0.5);
-        o.connect(lp); lp.connect(g); g.connect(reverb); o.start(t); o.stop(t + 0.6);
+        o.connect(lp); lp.connect(g); g.connect(reverb); g.connect(ambienceBus); o.start(t); o.stop(t + 0.6);
       }
     },
 
-    // ---------- SFX ----------
+    // ---------- SFX (interaction / UI / notification cues - always audible
+    // regardless of the Music or Ambience settings, per the brief: essential
+    // gameplay feedback is never gated by the "long session" mute options) ----------
     _tone(f, dur, type, vol, slide, dest) {
       if (!ctx || !sfxOn) return;
       const t = ctx.currentTime, o = ctx.createOscillator(); o.type = type || 'sine'; o.frequency.setValueAtTime(f, t);
       if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, f * slide), t + dur);
       const g = ctx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol || 0.1, t + 0.008);
       g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
-      o.connect(g); g.connect(dest || master); o.start(t); o.stop(t + dur + 0.05);
+      o.connect(g); g.connect(dest || sfxBus); o.start(t); o.stop(t + dur + 0.05);
     },
     _noise(dur, fType, f0, f1, vol, dest) {
       if (!ctx || !sfxOn) return;
@@ -176,7 +204,7 @@
       f.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t + dur);
       const g = ctx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + dur * 0.15);
       g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
-      s.connect(f); f.connect(g); g.connect(dest || master); s.start(t); s.stop(t + dur + 0.05);
+      s.connect(f); f.connect(g); g.connect(dest || sfxBus); s.start(t); s.stop(t + dur + 0.05);
     },
     click() { A._tone(880, 0.05, 'square', 0.03); },
     tick() { A._tone(1500, 0.02, 'square', 0.012); },
@@ -204,7 +232,7 @@
       const s = ctx.createBufferSource(); s.buffer = noiseBuf; const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 2;
       f.frequency.setValueAtTime(3000, t); f.frequency.exponentialRampToValueAtTime(200, t + 1.6);
       const g = ctx.createGain(); g.gain.setValueAtTime(0.0008, t); g.gain.exponentialRampToValueAtTime(0.16, t + 1.5); g.gain.linearRampToValueAtTime(0, t + 1.6);
-      s.connect(f); f.connect(g); g.connect(reverb); g.connect(master); s.start(t); s.stop(t + 1.7);
+      s.connect(f); f.connect(g); g.connect(reverb); g.connect(sfxBus); s.start(t); s.stop(t + 1.7);
     },
     enterMemory() { A.reverse(); A._tone(60, 2.4, 'sine', 0.2, 3); setTimeout(() => A.whoosh(1.6), 700); },
     pulse() { A._tone(60, 0.9, 'sine', 0.2, 0.7); },
@@ -221,7 +249,7 @@
       try {
         speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(String(text).replace(/MNEMOS/g, 'Neemos').replace(/M-09/g, 'M zero nine').replace(/[█░]/g, ''));
-        u.pitch = 0.55; u.rate = 0.88; u.volume = 0.95;
+        u.pitch = 0.55; u.rate = 0.88; u.volume = 0.95 * busVol.dialogue * volume;
         if (!voice) {
           const vs = speechSynthesis.getVoices();
           voice = vs.find((v) => /en[-_]/i.test(v.lang) && /(David|Guy|Mark|Daniel|Alex|Male)/i.test(v.name)) || vs.find((v) => /^en/i.test(v.lang)) || null;

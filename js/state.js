@@ -10,7 +10,7 @@
     contradictions: { c1: false, c2: false, c3: false },
     flags: {},
     topics: {},
-    settings: { volume: 0.8, tts: true, subs: true },
+    settings: { volume: 0.8, tts: true, subs: true, musicVol: 0.8, ambienceVol: 0.8, sfxVol: 0.8, dialogueVol: 0.9 },
     endingsSeen: {},
 
     reset() {
